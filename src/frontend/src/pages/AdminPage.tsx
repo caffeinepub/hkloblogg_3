@@ -34,11 +34,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { BlogRole } from "../backend.d";
 import type { Category } from "../backend.d";
+import { BlogRole } from "../backend.d";
 import { useAuth } from "../context/AuthContext";
 import {
   useAddCategory,
+  useAuthorAlias,
   useBlockUser,
   useCategories,
   useCategoryPermissions,
@@ -674,6 +675,11 @@ function CategoryPermissionCard({
   );
 }
 
+function PostAuthorCell({ authorId }: { authorId: string }) {
+  const { data: alias } = useAuthorAlias(authorId);
+  return <span>{alias ?? authorId}</span>;
+}
+
 function PostsTab() {
   const { data: posts, isLoading } = usePosts();
   const deleteMutation = useDeletePost();
@@ -713,7 +719,9 @@ function PostsTab() {
                   {post.title}
                 </TableCell>
                 <TableCell>{cat?.name ?? "-"}</TableCell>
-                <TableCell>{post.authorId}</TableCell>
+                <TableCell>
+                  <PostAuthorCell authorId={post.authorId} />
+                </TableCell>
                 <TableCell>
                   <div className="flex gap-1 flex-wrap">
                     <Badge

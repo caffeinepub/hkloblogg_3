@@ -6,9 +6,9 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Actor, HttpAgent, type HttpAgentOptions, type ActorConfig, type Agent, type ActorSubclass } from "@icp-sdk/core/agent";
+import { Actor, type ActorConfig, type ActorSubclass, type Agent, HttpAgent, type HttpAgentOptions } from "@icp-sdk/core/agent";
 import type { Principal } from "@icp-sdk/core/principal";
-import { idlFactory, type _SERVICE } from "./declarations/backend.did";
+import { type _SERVICE, idlFactory } from "./declarations/backend.did";
 export interface Some<T> {
     __kind__: "Some";
     value: T;
@@ -188,6 +188,7 @@ export interface backendInterface {
     unlikePost(postId: string): Promise<void>;
     updateUserRole(userId: string, newRole: BlogRole): Promise<void>;
 }
+
 import type { BlogRole as _BlogRole, CommentView as _CommentView, ExternalBlob as _ExternalBlob, PostView as _PostView, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}

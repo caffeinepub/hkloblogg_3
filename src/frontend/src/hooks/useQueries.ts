@@ -7,7 +7,6 @@ import type {
   PostView,
   UserProfile,
 } from "../backend.d";
-import type { ExternalBlob } from "../backend.d";
 import { useActor } from "./useActor";
 
 export function usePosts() {
@@ -106,6 +105,25 @@ export function useUserProfile(userId: string) {
   });
 }
 
+/** Resolves an authorId (principal string or alias) to a display alias. */
+export function useAuthorAlias(authorId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<string>({
+    queryKey: ["authorAlias", authorId],
+    queryFn: async () => {
+      if (!actor || !authorId) return authorId;
+      try {
+        const profile = await actor.getUserProfile(authorId);
+        return profile?.alias ?? authorId;
+      } catch {
+        return authorId;
+      }
+    },
+    enabled: !!actor && !isFetching && !!authorId,
+    staleTime: 5 * 60 * 1000, // 5 min cache
+  });
+}
+
 export function useListUsers() {
   const { actor, isFetching } = useActor();
   return useQuery<UserProfile[]>({
@@ -149,7 +167,10 @@ export function useLikePost() {
     mutationFn: async ({
       postId,
       liked,
-    }: { postId: string; liked: boolean }) => {
+    }: {
+      postId: string;
+      liked: boolean;
+    }) => {
       if (!actor) throw new Error("No actor");
       if (liked) await actor.unlikePost(postId);
       else await actor.likePost(postId);
@@ -190,7 +211,10 @@ export function useDeleteComment() {
     mutationFn: async ({
       commentId,
       postId: _postId,
-    }: { commentId: string; postId: string }) => {
+    }: {
+      commentId: string;
+      postId: string;
+    }) => {
       if (!actor) throw new Error("No actor");
       return actor.deleteComment(commentId);
     },
@@ -207,7 +231,10 @@ export function useLikeComment() {
     mutationFn: async ({
       commentId,
       postId: _postId,
-    }: { commentId: string; postId: string }) => {
+    }: {
+      commentId: string;
+      postId: string;
+    }) => {
       if (!actor) throw new Error("No actor");
       return actor.likeComment(commentId);
     },
@@ -309,7 +336,10 @@ export function useFollowUser() {
     mutationFn: async ({
       targetUserId,
       isFollowing,
-    }: { targetUserId: string; isFollowing: boolean }) => {
+    }: {
+      targetUserId: string;
+      isFollowing: boolean;
+    }) => {
       if (!actor) throw new Error("No actor");
       if (isFollowing) await actor.unfollowUser(targetUserId);
       else await actor.followUser(targetUserId);
@@ -364,7 +394,10 @@ export function useBlockUser() {
     mutationFn: async ({
       userId,
       block,
-    }: { userId: string; block: boolean }) => {
+    }: {
+      userId: string;
+      block: boolean;
+    }) => {
       if (!actor) throw new Error("No actor");
       if (block) await actor.blockUser(userId);
       else await actor.unblockUser(userId);

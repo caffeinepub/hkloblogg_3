@@ -2,20 +2,22 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { backendInterface } from "../backend";
 import { createActorWithConfig } from "../config";
+// CRITICAL FIX: This file MUST use useIdentityStore (Ed25519 identity) for all backend calls.
+// Do NOT replace useIdentityStore with useInternetIdentity -- that will break login.
+import { useIdentityStore } from "../stores/identityStore";
 import { getSecretParameter } from "../utils/urlParams";
-import { useInternetIdentity } from "./useInternetIdentity";
 
 const ACTOR_QUERY_KEY = "actor";
 export function useActor() {
-  const { identity } = useInternetIdentity();
+  const identity = useIdentityStore((state) => state.identity);
   const queryClient = useQueryClient();
   const actorQuery = useQuery<backendInterface>({
-    queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
+    queryKey: [
+      ACTOR_QUERY_KEY,
+      identity?.getPrincipal().toString() ?? "anonymous",
+    ],
     queryFn: async () => {
-      const isAuthenticated = !!identity;
-
-      if (!isAuthenticated) {
-        // Return anonymous actor if not authenticated
+      if (!identity) {
         return await createActorWithConfig();
       }
 
@@ -30,13 +32,10 @@ export function useActor() {
       await actor._initializeAccessControlWithSecret(adminToken);
       return actor;
     },
-    // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
-    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 
-  // When the actor changes, invalidate dependent queries
   useEffect(() => {
     if (actorQuery.data) {
       queryClient.invalidateQueries({

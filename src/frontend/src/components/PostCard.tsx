@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Link } from "@tanstack/react-router";
 import { Calendar, Heart, MessageCircle, Pin } from "lucide-react";
 import type { Category, PostView } from "../backend.d";
+import { AuthorDisplay } from "./AuthorDisplay";
 
 interface PostCardProps {
   post: PostView;
@@ -77,17 +78,11 @@ export default function PostCard({
         </p>
 
         <div className="flex items-center justify-between pt-3 border-t border-border">
-          <Link
-            to="/profile/$userId"
-            params={{ userId: post.authorId }}
-            data-ocid={`posts.item.${index}.author.link`}
-            className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5"
-          >
-            <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">
-              {post.authorId.slice(0, 1).toUpperCase()}
-            </span>
-            {post.authorId}
-          </Link>
+          <AuthorDisplay
+            authorId={post.authorId}
+            linkClassName="text-xs font-medium text-muted-foreground"
+            ocid={`posts.item.${index}.author.link`}
+          />
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Heart className="h-3.5 w-3.5" />

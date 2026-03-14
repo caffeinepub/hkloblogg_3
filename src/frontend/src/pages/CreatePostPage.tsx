@@ -20,6 +20,7 @@ import {
   useCreatePost,
   useEditPost,
   usePost,
+  usePublishPost,
 } from "../hooks/useQueries";
 import { compressImage, readVideoFile } from "../utils/imageCompression";
 
@@ -36,6 +37,7 @@ export default function CreatePostPage() {
   const { data: categories } = useCategories();
   const createMutation = useCreatePost();
   const editMutation = useEditPost();
+  const publishMutation = usePublishPost();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -125,7 +127,9 @@ export default function CreatePostPage() {
           categoryId,
           mediaUrls: mediaBlobs,
         });
-        toast.success("Inlägg skapat!");
+        // Publish the post immediately after creating it
+        await publishMutation.mutateAsync(newId);
+        toast.success("Inlägg publicerat!");
         navigate({ to: "/post/$id", params: { id: newId } });
       }
     } catch (err: unknown) {
@@ -263,7 +267,7 @@ export default function CreatePostPage() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
               {uploading
-                ? "Sparar..."
+                ? "Publicerar..."
                 : isEditing
                   ? "Spara ändringar"
                   : "Publicera inlägg"}

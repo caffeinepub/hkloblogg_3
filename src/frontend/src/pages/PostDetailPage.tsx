@@ -12,6 +12,7 @@ import { BlogRole } from "../backend.d";
 import { useAuth } from "../context/AuthContext";
 import {
   useAddComment,
+  useAuthorAlias,
   useCategories,
   useComments,
   useDeleteComment,
@@ -30,6 +31,20 @@ function formatDate(ts: bigint): string {
   }).format(new Date(ms));
 }
 
+function CommentAuthor({ authorId }: { authorId: string }) {
+  const { data: alias } = useAuthorAlias(authorId);
+  const displayName = alias ?? authorId;
+  return (
+    <Link
+      to="/profile/$userId"
+      params={{ userId: authorId }}
+      className="text-sm font-semibold hover:text-primary transition-colors"
+    >
+      {displayName}
+    </Link>
+  );
+}
+
 export default function PostDetailPage() {
   const { id } = useParams({ from: "/post/$id" });
   const navigate = useNavigate();
@@ -38,6 +53,7 @@ export default function PostDetailPage() {
   const { data: post, isLoading: postLoading } = usePost(id);
   const { data: comments, isLoading: commentsLoading } = useComments(id);
   const { data: categories } = useCategories();
+  const { data: authorAlias } = useAuthorAlias(post?.authorId ?? "");
   const likeMutation = useLikePost();
   const addCommentMutation = useAddComment();
   const deleteCommentMutation = useDeleteComment();
@@ -84,6 +100,7 @@ export default function PostDetailPage() {
   const isLiked = currentUser ? post.likes.includes(currentUser.alias) : false;
   const canEdit =
     currentUser?.alias === post.authorId ||
+    currentUser?.alias === authorAlias ||
     currentUser?.profile.blogRole === BlogRole.superadmin ||
     currentUser?.profile.blogRole === BlogRole.moderator;
 
@@ -146,6 +163,8 @@ export default function PostDetailPage() {
     }
   };
 
+  const displayAuthor = authorAlias ?? post.authorId;
+
   return (
     <main
       className="container mx-auto px-4 py-8 max-w-3xl animate-fade-in"
@@ -188,10 +207,10 @@ export default function PostDetailPage() {
           >
             <Avatar className="h-7 w-7">
               <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                {post.authorId.slice(0, 2).toUpperCase()}
+                {displayAuthor.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <span className="font-medium">{post.authorId}</span>
+            <span className="font-medium">{displayAuthor}</span>
           </Link>
           {canEdit && (
             <div className="flex items-center gap-2">
@@ -370,13 +389,7 @@ export default function PostDetailPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <Link
-                        to="/profile/$userId"
-                        params={{ userId: comment.authorId }}
-                        className="text-sm font-semibold hover:text-primary transition-colors"
-                      >
-                        {comment.authorId}
-                      </Link>
+                      <CommentAuthor authorId={comment.authorId} />
                       <span className="text-xs text-muted-foreground ml-2">
                         {formatDate(comment.createdAt)}
                       </span>
