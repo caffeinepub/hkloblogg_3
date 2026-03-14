@@ -90,6 +90,11 @@ actor {
     name : Text;
   };
 
+  type CategoryPermission = {
+    readAllowlist : [Text];    // Empty = everyone can read; non-empty = only these aliases can read
+    commentAllowlist : [Text]; // Empty = everyone can comment; non-empty = only these aliases can comment
+  };
+
   // State
   let users = Map.empty<Text, User>();
   let usersByAlias = Map.empty<Text, Text>();
@@ -98,6 +103,7 @@ actor {
   let comments = Map.empty<Text, Comment>();
   let categories = Map.empty<Text, Category>();
   let follows = Map.empty<Text, Set.Set<Text>>();
+  let categoryPermissions = Map.empty<Text, CategoryPermission>();
 
   var nextPostId : Nat = 0;
   var nextCommentId : Nat = 0;
@@ -152,6 +158,47 @@ actor {
     };
   };
 
+  func getCallerAlias(caller : Principal) : ?Text {
+    let userId = caller.toText();
+    switch (users.get(userId)) {
+      case (?user) { ?user.alias };
+      case (null) { null };
+    };
+  };
+
+  func arrayContainsText(arr : [Text], value : Text) : Bool {
+    for (item in arr.vals()) {
+      if (item == value) { return true };
+    };
+    false;
+  };
+
+  func canReadCategory(callerAlias : ?Text, categoryId : Text) : Bool {
+    switch (categoryPermissions.get(categoryId)) {
+      case (?perm) {
+        if (perm.readAllowlist.size() == 0) { return true };
+        switch (callerAlias) {
+          case (?alias) { arrayContainsText(perm.readAllowlist, alias) };
+          case (null) { false };
+        };
+      };
+      case (null) { true };
+    };
+  };
+
+  func canCommentCategory(callerAlias : ?Text, categoryId : Text) : Bool {
+    switch (categoryPermissions.get(categoryId)) {
+      case (?perm) {
+        if (perm.commentAllowlist.size() == 0) { return true };
+        switch (callerAlias) {
+          case (?alias) { arrayContainsText(perm.commentAllowlist, alias) };
+          case (null) { false };
+        };
+      };
+      case (null) { true };
+    };
+  };
+
   // USER MANAGEMENT
 
   public shared ({ caller }) func register(alias : Text, passwordHash : Blob, salt : Blob) : async Text {
@@ -184,8 +231,6 @@ actor {
     users.add(userId, user);
     usersByAlias.add(alias, userId);
 
-    // Assign user role in access control
-    AccessControl.assignRole(accessControlState, caller, caller, #user);
 
     // Generate session token
     let token = userId # "-" # Time.now().toText();
@@ -549,25 +594,37 @@ actor {
   };
 
   public query ({ caller }) func getPosts() : async [PostView] {
-    posts.values().toArray().map(postToPostView);
+    let alias = getCallerAlias(caller);
+    let allPosts = posts.values().toArray();
+    let accessible = allPosts.filter(func(post) { canReadCategory(alias, post.categoryId) });
+    accessible.map(postToPostView);
   };
 
   public query ({ caller }) func getPost(postId : Text) : async ?PostView {
+    let alias = getCallerAlias(caller);
     switch (posts.get(postId)) {
-      case (?post) { ?postToPostView(post) };
+      case (?post) {
+        if (not canReadCategory(alias, post.categoryId)) { return null };
+        ?postToPostView(post);
+      };
       case (null) { null };
     };
   };
 
   public query ({ caller }) func getPostsByCategory(categoryId : Text) : async [PostView] {
+    let alias = getCallerAlias(caller);
+    if (not canReadCategory(alias, categoryId)) { return [] };
     let allPosts = posts.values().toArray();
     let filteredPosts = allPosts.filter(func(post) { post.categoryId == categoryId });
     filteredPosts.map(postToPostView);
   };
 
   public query ({ caller }) func getPostsByAuthor(authorId : Text) : async [PostView] {
+    let alias = getCallerAlias(caller);
     let allPosts = posts.values().toArray();
-    let filteredPosts = allPosts.filter(func(post) { post.authorId == authorId });
+    let filteredPosts = allPosts.filter(func(post) {
+      post.authorId == authorId and canReadCategory(alias, post.categoryId)
+    });
     filteredPosts.map(postToPostView);
   };
 
@@ -577,6 +634,7 @@ actor {
     };
 
     let userId = caller.toText();
+    let alias = getCallerAlias(caller);
     let allPosts = posts.values().toArray();
     let followingArray = switch (follows.get(userId)) {
       case (?followingSet) { followingSet.toArray() };
@@ -594,7 +652,7 @@ actor {
 
     let filteredPosts = allPosts.filter(
       func(post) {
-        containsFollowing(post.authorId);
+        containsFollowing(post.authorId) and canReadCategory(alias, post.categoryId)
       }
     );
     filteredPosts.map(postToPostView);
@@ -605,6 +663,16 @@ actor {
   public shared ({ caller }) func addComment(postId : Text, text : Text, imageUrl : ?Storage.ExternalBlob) : async Text {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can add comments");
+    };
+
+    let alias = getCallerAlias(caller);
+    switch (posts.get(postId)) {
+      case (?post) {
+        if (not canCommentCategory(alias, post.categoryId)) {
+          Runtime.trap("Unauthorized: You don't have permission to comment in this category");
+        };
+      };
+      case (null) { Runtime.trap("Post not found") };
     };
 
     let userId = caller.toText();
@@ -692,10 +760,29 @@ actor {
     };
 
     categories.remove(categoryId);
+    categoryPermissions.remove(categoryId);
   };
 
   public query ({ caller }) func getCategories() : async [Category] {
     categories.values().toArray();
+  };
+
+  // CATEGORY PERMISSIONS
+
+  public query ({ caller }) func getCategoryPermissions(categoryId : Text) : async CategoryPermission {
+    switch (categoryPermissions.get(categoryId)) {
+      case (?perm) { perm };
+      case (null) { { readAllowlist = []; commentAllowlist = [] } };
+    };
+  };
+
+  public shared ({ caller }) func setCategoryPermissions(categoryId : Text, readAllowlist : [Text], commentAllowlist : [Text]) : async () {
+    if (not isSuperadmin(caller)) {
+      Runtime.trap("Unauthorized: Only superadmins can set category permissions");
+    };
+
+    let perm : CategoryPermission = { readAllowlist; commentAllowlist };
+    categoryPermissions.add(categoryId, perm);
   };
 
   // FOLLOWS

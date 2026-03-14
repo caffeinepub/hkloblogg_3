@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   BlogRole,
   Category,
+  CategoryPermission,
   CommentView,
   PostView,
   UserProfile,
@@ -369,5 +370,41 @@ export function useBlockUser() {
       else await actor.unblockUser(userId);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useCategoryPermissions(categoryId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<CategoryPermission>({
+    queryKey: ["categoryPermissions", categoryId],
+    queryFn: async () => {
+      if (!actor) return { readAllowlist: [], commentAllowlist: [] };
+      return (actor as any).getCategoryPermissions(categoryId);
+    },
+    enabled: !!actor && !isFetching && !!categoryId,
+  });
+}
+
+export function useSetCategoryPermissions() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      categoryId: string;
+      readAllowlist: string[];
+      commentAllowlist: string[];
+    }) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as any).setCategoryPermissions(
+        vars.categoryId,
+        vars.readAllowlist,
+        vars.commentAllowlist,
+      );
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["categoryPermissions", vars.categoryId],
+      });
+    },
   });
 }

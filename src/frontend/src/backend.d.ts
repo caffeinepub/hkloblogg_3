@@ -18,6 +18,10 @@ export interface Category {
     id: string;
     name: string;
 }
+export interface CategoryPermission {
+    readAllowlist: Array<string>;
+    commentAllowlist: Array<string>;
+}
 export type Time = bigint;
 export interface PostView {
     id: string;
@@ -71,6 +75,7 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCategories(): Promise<Array<Category>>;
+    getCategoryPermissions(categoryId: string): Promise<CategoryPermission>;
     getCommentsForPost(postId: string): Promise<Array<CommentView>>;
     getFollowers(userId: string): Promise<Array<string>>;
     getFollowing(userId: string): Promise<Array<string>>;
@@ -90,6 +95,7 @@ export interface backendInterface {
     publishPost(postId: string): Promise<void>;
     register(alias: string, passwordHash: Uint8Array, salt: Uint8Array): Promise<string>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setCategoryPermissions(categoryId: string, readAllowlist: Array<string>, commentAllowlist: Array<string>): Promise<void>;
     unblockUser(userId: string): Promise<void>;
     unfollowUser(targetUserId: string): Promise<void>;
     unlikePost(postId: string): Promise<void>;
