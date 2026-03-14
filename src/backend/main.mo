@@ -3,7 +3,6 @@ import Set "mo:core/Set";
 import List "mo:core/List";
 import Time "mo:core/Time";
 import Map "mo:core/Map";
-import Order "mo:core/Order";
 import Blob "mo:core/Blob";
 import Nat "mo:core/Nat";
 import Array "mo:core/Array";
@@ -14,12 +13,10 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Initialize access control
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
   include MixinStorage();
 
-  // Custom role type for blog-specific roles
   type BlogRole = { #superadmin; #moderator; #user };
 
   type User = {
@@ -91,11 +88,52 @@ actor {
   };
 
   type CategoryPermission = {
-    readAllowlist : [Text];    // Empty = everyone can read; non-empty = only these aliases can read
-    commentAllowlist : [Text]; // Empty = everyone can comment; non-empty = only these aliases can comment
+    readAllowlist : [Text];
+    commentAllowlist : [Text];
   };
 
-  // State
+  // Stable serialization types (no Set, use arrays)
+  type StablePost = {
+    id : Text;
+    title : Text;
+    body : Text;
+    authorId : Text;
+    categoryId : Text;
+    mediaUrls : [Storage.ExternalBlob];
+    isPublished : Bool;
+    isPinned : Bool;
+    likesArr : [Text];
+    createdAt : Time.Time;
+    updatedAt : Time.Time;
+  };
+
+  type StableComment = {
+    id : Text;
+    postId : Text;
+    authorId : Text;
+    text : Text;
+    imageUrl : ?Storage.ExternalBlob;
+    likesArr : [Text];
+    createdAt : Time.Time;
+  };
+
+  type StableFollows = {
+    userId : Text;
+    following : [Text];
+  };
+
+  // ── Stable backing storage ──────────────────────────────────────────────────
+  stable var stableUsers : [(Text, User)] = [];
+  stable var stableUsersByAlias : [(Text, Text)] = [];
+  stable var stablePosts : [(Text, StablePost)] = [];
+  stable var stableComments : [(Text, StableComment)] = [];
+  stable var stableCategories : [(Text, Category)] = [];
+  stable var stableCategoryPermissions : [(Text, CategoryPermission)] = [];
+  stable var stableFollows : [StableFollows] = [];
+  stable var stableNextPostId : Nat = 0;
+  stable var stableNextCommentId : Nat = 0;
+
+  // ── Runtime state (restored from stable on startup) ─────────────────────────
   let users = Map.empty<Text, User>();
   let usersByAlias = Map.empty<Text, Text>();
   let sessions = Map.empty<Text, Text>();
@@ -105,33 +143,110 @@ actor {
   let follows = Map.empty<Text, Set.Set<Text>>();
   let categoryPermissions = Map.empty<Text, CategoryPermission>();
 
-  var nextPostId : Nat = 0;
-  var nextCommentId : Nat = 0;
+  var nextPostId : Nat = stableNextPostId;
+  var nextCommentId : Nat = stableNextCommentId;
 
-  // Initialize default categories
+  // Restore runtime state from stable arrays
+  for ((k, v) in stableUsers.vals()) { users.add(k, v) };
+  for ((k, v) in stableUsersByAlias.vals()) { usersByAlias.add(k, v) };
+  for ((k, sp) in stablePosts.vals()) {
+    let likesSet = Set.empty<Text>();
+    for (l in sp.likesArr.vals()) { likesSet.add(l) };
+    let post : Post = {
+      id = sp.id; title = sp.title; body = sp.body;
+      authorId = sp.authorId; categoryId = sp.categoryId;
+      mediaUrls = sp.mediaUrls; isPublished = sp.isPublished;
+      isPinned = sp.isPinned; likes = likesSet;
+      createdAt = sp.createdAt; updatedAt = sp.updatedAt;
+    };
+    posts.add(k, post);
+  };
+  for ((k, sc) in stableComments.vals()) {
+    let likesSet = Set.empty<Text>();
+    for (l in sc.likesArr.vals()) { likesSet.add(l) };
+    let comment : Comment = {
+      id = sc.id; postId = sc.postId; authorId = sc.authorId;
+      text = sc.text; imageUrl = sc.imageUrl; likes = likesSet;
+      createdAt = sc.createdAt;
+    };
+    comments.add(k, comment);
+  };
+  for ((k, v) in stableCategories.vals()) { categories.add(k, v) };
+  for ((k, v) in stableCategoryPermissions.vals()) { categoryPermissions.add(k, v) };
+  for (sf in stableFollows.vals()) {
+    let followSet = Set.empty<Text>();
+    for (f in sf.following.vals()) { followSet.add(f) };
+    follows.add(sf.userId, followSet);
+  };
+
+  // Initialize default categories only if none exist
   func initCategories() {
-    let defaultCategories = ["Teknik", "Livsstil", "Nyheter", "Världen", "Natur", "Livsberättelser"];
-    for (name in defaultCategories.vals()) {
-      let cat : Category = { id = name; name = name };
-      categories.add(name, cat);
+    if (categories.size() == 0) {
+      let defaultCategories = ["Teknik", "Livsstil", "Nyheter", "Världen", "Natur", "Livsberättelser"];
+      for (name in defaultCategories.vals()) {
+        let cat : Category = { id = name; name = name };
+        categories.add(name, cat);
+      };
     };
   };
   initCategories();
 
-  // Helper functions
-  func getUserById(userId : Text) : ?User {
-    users.get(userId);
+  // ── Upgrade hooks ───────────────────────────────────────────────────────────
+  system func preupgrade() {
+    stableNextPostId := nextPostId;
+    stableNextCommentId := nextCommentId;
+    stableUsers := users.entries().toArray();
+    stableUsersByAlias := usersByAlias.entries().toArray();
+    stableCategories := categories.entries().toArray();
+    stableCategoryPermissions := categoryPermissions.entries().toArray();
+
+    let postsArr = List.empty<(Text, StablePost)>();
+    for ((k, p) in posts.entries()) {
+      let sp : StablePost = {
+        id = p.id; title = p.title; body = p.body;
+        authorId = p.authorId; categoryId = p.categoryId;
+        mediaUrls = p.mediaUrls; isPublished = p.isPublished;
+        isPinned = p.isPinned; likesArr = p.likes.toArray();
+        createdAt = p.createdAt; updatedAt = p.updatedAt;
+      };
+      postsArr.add((k, sp));
+    };
+    stablePosts := postsArr.toArray();
+
+    let commentsArr = List.empty<(Text, StableComment)>();
+    for ((k, c) in comments.entries()) {
+      let sc : StableComment = {
+        id = c.id; postId = c.postId; authorId = c.authorId;
+        text = c.text; imageUrl = c.imageUrl; likesArr = c.likes.toArray();
+        createdAt = c.createdAt;
+      };
+      commentsArr.add((k, sc));
+    };
+    stableComments := commentsArr.toArray();
+
+    let followsArr = List.empty<StableFollows>();
+    for ((userId, followSet) in follows.entries()) {
+      followsArr.add({ userId; following = followSet.toArray() });
+    };
+    stableFollows := followsArr.toArray();
   };
 
+  system func postupgrade() {
+    // Clear stable arrays to free memory (data is already in runtime maps)
+    stableUsers := [];
+    stableUsersByAlias := [];
+    stablePosts := [];
+    stableComments := [];
+    stableCategories := [];
+    stableCategoryPermissions := [];
+    stableFollows := [];
+  };
+
+  // ── Helper functions ────────────────────────────────────────────────────────
   func isSuperadmin(caller : Principal) : Bool {
     let userId = caller.toText();
     switch (users.get(userId)) {
-      case (?user) {
-        switch (user.blogRole) {
-          case (#superadmin) { true };
-          case (_) { false };
-        };
-      };
+      case (?user) { user.blogRole == #superadmin };
       case (null) { false };
     };
   };
@@ -140,11 +255,7 @@ actor {
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
-        switch (user.blogRole) {
-          case (#superadmin) { true };
-          case (#moderator) { true };
-          case (_) { false };
-        };
+        user.blogRole == #superadmin or user.blogRole == #moderator
       };
       case (null) { false };
     };
@@ -199,40 +310,22 @@ actor {
     };
   };
 
-  // USER MANAGEMENT
+  // ── User management ─────────────────────────────────────────────────────────
 
   public shared ({ caller }) func register(alias : Text, passwordHash : Blob, salt : Blob) : async Text {
     let userId = caller.toText();
-
-    // Check if user already exists
     switch (users.get(userId)) {
       case (?_) { Runtime.trap("User already registered") };
       case (null) {};
     };
-
-    // Check if alias is taken
     switch (usersByAlias.get(alias)) {
       case (?_) { Runtime.trap("Alias already in use") };
       case (null) {};
     };
-
-    // First user to register becomes superadmin
-    let blogRole : BlogRole = if (users.values().toArray().size() == 0) #superadmin else #user;
-
-    let user : User = {
-      userId;
-      alias;
-      passwordHash;
-      salt;
-      blogRole;
-      isBlocked = false;
-    };
-
+    let blogRole : BlogRole = if (users.size() == 0) #superadmin else #user;
+    let user : User = { userId; alias; passwordHash; salt; blogRole; isBlocked = false };
     users.add(userId, user);
     usersByAlias.add(alias, userId);
-
-
-    // Generate session token
     let token = userId # "-" # Time.now().toText();
     sessions.add(token, userId);
     token;
@@ -242,9 +335,7 @@ actor {
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
-        if (user.isBlocked) {
-          Runtime.trap("User is blocked");
-        };
+        if (user.isBlocked) { Runtime.trap("User is blocked") };
         let token = userId # "-" # Time.now().toText();
         sessions.add(token, userId);
         token;
@@ -257,7 +348,6 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can delete their account");
     };
-
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
@@ -269,35 +359,19 @@ actor {
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not isRegisteredUser(caller)) {
-      Runtime.trap("Unauthorized: Only registered users can view profiles");
-    };
-
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
-        ?{
-          alias = user.alias;
-          blogRole = user.blogRole;
-          isBlocked = user.isBlocked;
-        };
+        ?{ alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
       };
       case (null) { null };
     };
   };
 
   public query ({ caller }) func getUserProfile(userId : Text) : async ?UserProfile {
-    if (not isRegisteredUser(caller)) {
-      Runtime.trap("Unauthorized: Only registered users can view profiles");
-    };
-
     switch (users.get(userId)) {
       case (?user) {
-        ?{
-          alias = user.alias;
-          blogRole = user.blogRole;
-          isBlocked = user.isBlocked;
-        };
+        ?{ alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
       };
       case (null) { null };
     };
@@ -307,17 +381,13 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can save profiles");
     };
-
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
         let updatedUser : User = {
-          userId = user.userId;
-          alias = profile.alias;
-          passwordHash = user.passwordHash;
-          salt = user.salt;
-          blogRole = user.blogRole;
-          isBlocked = user.isBlocked;
+          userId = user.userId; alias = profile.alias;
+          passwordHash = user.passwordHash; salt = user.salt;
+          blogRole = user.blogRole; isBlocked = user.isBlocked;
         };
         users.add(userId, updatedUser);
       };
@@ -329,11 +399,7 @@ actor {
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
-        ?{
-          alias = user.alias;
-          blogRole = user.blogRole;
-          isBlocked = user.isBlocked;
-        };
+        ?{ alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
       };
       case (null) { null };
     };
@@ -343,27 +409,21 @@ actor {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can list all users");
     };
-
-    let usersArray = users.values().toArray();
-    usersArray.map(func(user) { { alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked } });
+    users.values().toArray().map(func(user) {
+      { alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked }
+    });
   };
-
-  // ROLE MANAGEMENT
 
   public shared ({ caller }) func updateUserRole(userId : Text, newRole : BlogRole) : async () {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can update user roles");
     };
-
     switch (users.get(userId)) {
       case (?user) {
         let updatedUser : User = {
-          userId = user.userId;
-          alias = user.alias;
-          passwordHash = user.passwordHash;
-          salt = user.salt;
-          blogRole = newRole;
-          isBlocked = user.isBlocked;
+          userId = user.userId; alias = user.alias;
+          passwordHash = user.passwordHash; salt = user.salt;
+          blogRole = newRole; isBlocked = user.isBlocked;
         };
         users.add(userId, updatedUser);
       };
@@ -375,16 +435,12 @@ actor {
     if (not isModerator(caller)) {
       Runtime.trap("Unauthorized: Only moderators and superadmins can block users");
     };
-
     switch (users.get(userId)) {
       case (?user) {
         let updatedUser : User = {
-          userId = user.userId;
-          alias = user.alias;
-          passwordHash = user.passwordHash;
-          salt = user.salt;
-          blogRole = user.blogRole;
-          isBlocked = true;
+          userId = user.userId; alias = user.alias;
+          passwordHash = user.passwordHash; salt = user.salt;
+          blogRole = user.blogRole; isBlocked = true;
         };
         users.add(userId, updatedUser);
       };
@@ -396,16 +452,12 @@ actor {
     if (not isModerator(caller)) {
       Runtime.trap("Unauthorized: Only moderators and superadmins can unblock users");
     };
-
     switch (users.get(userId)) {
       case (?user) {
         let updatedUser : User = {
-          userId = user.userId;
-          alias = user.alias;
-          passwordHash = user.passwordHash;
-          salt = user.salt;
-          blogRole = user.blogRole;
-          isBlocked = false;
+          userId = user.userId; alias = user.alias;
+          passwordHash = user.passwordHash; salt = user.salt;
+          blogRole = user.blogRole; isBlocked = false;
         };
         users.add(userId, updatedUser);
       };
@@ -413,31 +465,20 @@ actor {
     };
   };
 
-  // POSTS
+  // ── Posts ───────────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func createPost(title : Text, body : Text, categoryId : Text, mediaUrls : [Storage.ExternalBlob]) : async Text {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can create posts");
     };
-
     let userId = caller.toText();
     let postId = nextPostId.toText();
     nextPostId += 1;
-
     let post : Post = {
-      id = postId;
-      title;
-      body;
-      authorId = userId;
-      categoryId;
-      mediaUrls;
-      isPublished = false;
-      isPinned = false;
-      likes = Set.empty<Text>();
-      createdAt = Time.now();
-      updatedAt = Time.now();
+      id = postId; title; body; authorId = userId; categoryId; mediaUrls;
+      isPublished = false; isPinned = false; likes = Set.empty<Text>();
+      createdAt = Time.now(); updatedAt = Time.now();
     };
-
     posts.add(postId, post);
     postId;
   };
@@ -446,26 +487,16 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can edit posts");
     };
-
     let userId = caller.toText();
     switch (posts.get(postId)) {
       case (?post) {
         if (post.authorId != userId and not isModerator(caller)) {
           Runtime.trap("Unauthorized: Only the author or moderators can edit this post");
         };
-
         let updatedPost : Post = {
-          id = post.id;
-          title;
-          body;
-          authorId = post.authorId;
-          categoryId;
-          mediaUrls;
-          isPublished = post.isPublished;
-          isPinned = post.isPinned;
-          likes = post.likes;
-          createdAt = post.createdAt;
-          updatedAt = Time.now();
+          id = post.id; title; body; authorId = post.authorId; categoryId; mediaUrls;
+          isPublished = post.isPublished; isPinned = post.isPinned; likes = post.likes;
+          createdAt = post.createdAt; updatedAt = Time.now();
         };
         posts.add(postId, updatedPost);
       };
@@ -477,7 +508,6 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can delete posts");
     };
-
     let userId = caller.toText();
     switch (posts.get(postId)) {
       case (?post) {
@@ -494,26 +524,17 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can publish posts");
     };
-
     let userId = caller.toText();
     switch (posts.get(postId)) {
       case (?post) {
         if (post.authorId != userId) {
           Runtime.trap("Unauthorized: Only the author can publish this post");
         };
-
         let updatedPost : Post = {
-          id = post.id;
-          title = post.title;
-          body = post.body;
-          authorId = post.authorId;
-          categoryId = post.categoryId;
-          mediaUrls = post.mediaUrls;
-          isPublished = true;
-          isPinned = post.isPinned;
-          likes = post.likes;
-          createdAt = post.createdAt;
-          updatedAt = Time.now();
+          id = post.id; title = post.title; body = post.body;
+          authorId = post.authorId; categoryId = post.categoryId;
+          mediaUrls = post.mediaUrls; isPublished = true; isPinned = post.isPinned;
+          likes = post.likes; createdAt = post.createdAt; updatedAt = Time.now();
         };
         posts.add(postId, updatedPost);
       };
@@ -525,21 +546,13 @@ actor {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can pin posts");
     };
-
     switch (posts.get(postId)) {
       case (?post) {
         let updatedPost : Post = {
-          id = post.id;
-          title = post.title;
-          body = post.body;
-          authorId = post.authorId;
-          categoryId = post.categoryId;
-          mediaUrls = post.mediaUrls;
-          isPublished = post.isPublished;
-          isPinned = true;
-          likes = post.likes;
-          createdAt = post.createdAt;
-          updatedAt = Time.now();
+          id = post.id; title = post.title; body = post.body;
+          authorId = post.authorId; categoryId = post.categoryId;
+          mediaUrls = post.mediaUrls; isPublished = post.isPublished; isPinned = true;
+          likes = post.likes; createdAt = post.createdAt; updatedAt = Time.now();
         };
         posts.add(postId, updatedPost);
       };
@@ -551,7 +564,6 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can like posts");
     };
-
     let userId = caller.toText();
     switch (posts.get(postId)) {
       case (?post) {
@@ -566,7 +578,6 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can unlike posts");
     };
-
     let userId = caller.toText();
     switch (posts.get(postId)) {
       case (?post) {
@@ -579,25 +590,18 @@ actor {
 
   func postToPostView(post : Post) : PostView {
     {
-      id = post.id;
-      title = post.title;
-      body = post.body;
-      authorId = post.authorId;
-      categoryId = post.categoryId;
-      mediaUrls = post.mediaUrls;
-      isPublished = post.isPublished;
-      isPinned = post.isPinned;
-      likes = post.likes.toArray();
-      createdAt = post.createdAt;
-      updatedAt = post.updatedAt;
+      id = post.id; title = post.title; body = post.body;
+      authorId = post.authorId; categoryId = post.categoryId;
+      mediaUrls = post.mediaUrls; isPublished = post.isPublished;
+      isPinned = post.isPinned; likes = post.likes.toArray();
+      createdAt = post.createdAt; updatedAt = post.updatedAt;
     };
   };
 
   public query ({ caller }) func getPosts() : async [PostView] {
     let alias = getCallerAlias(caller);
     let allPosts = posts.values().toArray();
-    let accessible = allPosts.filter(func(post) { canReadCategory(alias, post.categoryId) });
-    accessible.map(postToPostView);
+    allPosts.filter(func(post) { canReadCategory(alias, post.categoryId) }).map(postToPostView);
   };
 
   public query ({ caller }) func getPost(postId : Text) : async ?PostView {
@@ -614,57 +618,43 @@ actor {
   public query ({ caller }) func getPostsByCategory(categoryId : Text) : async [PostView] {
     let alias = getCallerAlias(caller);
     if (not canReadCategory(alias, categoryId)) { return [] };
-    let allPosts = posts.values().toArray();
-    let filteredPosts = allPosts.filter(func(post) { post.categoryId == categoryId });
-    filteredPosts.map(postToPostView);
+    posts.values().toArray()
+      .filter(func(post) { post.categoryId == categoryId })
+      .map(postToPostView);
   };
 
   public query ({ caller }) func getPostsByAuthor(authorId : Text) : async [PostView] {
     let alias = getCallerAlias(caller);
-    let allPosts = posts.values().toArray();
-    let filteredPosts = allPosts.filter(func(post) {
-      post.authorId == authorId and canReadCategory(alias, post.categoryId)
-    });
-    filteredPosts.map(postToPostView);
+    posts.values().toArray()
+      .filter(func(post) { post.authorId == authorId and canReadCategory(alias, post.categoryId) })
+      .map(postToPostView);
   };
 
   public query ({ caller }) func getFollowingFeed() : async [PostView] {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can view their feed");
     };
-
     let userId = caller.toText();
     let alias = getCallerAlias(caller);
-    let allPosts = posts.values().toArray();
     let followingArray = switch (follows.get(userId)) {
-      case (?followingSet) { followingSet.toArray() };
+      case (?fs) { fs.toArray() };
       case (null) { [] };
     };
-
-    func containsFollowing(authorId : Text) : Bool {
-      for (user in followingArray.vals()) {
-        if (user == authorId) {
-          return true;
-        };
-      };
+    func isFollowing(authorId : Text) : Bool {
+      for (u in followingArray.vals()) { if (u == authorId) return true };
       false;
     };
-
-    let filteredPosts = allPosts.filter(
-      func(post) {
-        containsFollowing(post.authorId) and canReadCategory(alias, post.categoryId)
-      }
-    );
-    filteredPosts.map(postToPostView);
+    posts.values().toArray()
+      .filter(func(post) { isFollowing(post.authorId) and canReadCategory(alias, post.categoryId) })
+      .map(postToPostView);
   };
 
-  // COMMENTS
+  // ── Comments ────────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func addComment(postId : Text, text : Text, imageUrl : ?Storage.ExternalBlob) : async Text {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can add comments");
     };
-
     let alias = getCallerAlias(caller);
     switch (posts.get(postId)) {
       case (?post) {
@@ -674,21 +664,13 @@ actor {
       };
       case (null) { Runtime.trap("Post not found") };
     };
-
     let userId = caller.toText();
     let commentId = nextCommentId.toText();
     nextCommentId += 1;
-
     let comment : Comment = {
-      id = commentId;
-      postId;
-      authorId = userId;
-      text;
-      imageUrl;
-      likes = Set.empty<Text>();
-      createdAt = Time.now();
+      id = commentId; postId; authorId = userId; text; imageUrl;
+      likes = Set.empty<Text>(); createdAt = Time.now();
     };
-
     comments.add(commentId, comment);
     commentId;
   };
@@ -697,7 +679,6 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can delete comments");
     };
-
     let userId = caller.toText();
     switch (comments.get(commentId)) {
       case (?comment) {
@@ -714,7 +695,6 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can like comments");
     };
-
     let userId = caller.toText();
     switch (comments.get(commentId)) {
       case (?comment) {
@@ -727,38 +707,31 @@ actor {
 
   func commentToCommentView(comment : Comment) : CommentView {
     {
-      id = comment.id;
-      postId = comment.postId;
-      authorId = comment.authorId;
-      text = comment.text;
-      imageUrl = comment.imageUrl;
-      likes = comment.likes.toArray();
-      createdAt = comment.createdAt;
+      id = comment.id; postId = comment.postId; authorId = comment.authorId;
+      text = comment.text; imageUrl = comment.imageUrl;
+      likes = comment.likes.toArray(); createdAt = comment.createdAt;
     };
   };
 
   public query ({ caller }) func getCommentsForPost(postId : Text) : async [CommentView] {
-    let allComments = comments.values().toArray();
-    let filteredComments = allComments.filter(func(comment) { comment.postId == postId });
-    filteredComments.map(commentToCommentView);
+    comments.values().toArray()
+      .filter(func(comment) { comment.postId == postId })
+      .map(commentToCommentView);
   };
 
-  // CATEGORIES
+  // ── Categories ──────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func addCategory(name : Text) : async () {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can add categories");
     };
-
-    let category : Category = { id = name; name = name };
-    categories.add(name, category);
+    categories.add(name, { id = name; name = name });
   };
 
   public shared ({ caller }) func deleteCategory(categoryId : Text) : async () {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can delete categories");
     };
-
     categories.remove(categoryId);
     categoryPermissions.remove(categoryId);
   };
@@ -767,7 +740,7 @@ actor {
     categories.values().toArray();
   };
 
-  // CATEGORY PERMISSIONS
+  // ── Category permissions ────────────────────────────────────────────────────
 
   public query ({ caller }) func getCategoryPermissions(categoryId : Text) : async CategoryPermission {
     switch (categoryPermissions.get(categoryId)) {
@@ -780,27 +753,19 @@ actor {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can set category permissions");
     };
-
-    let perm : CategoryPermission = { readAllowlist; commentAllowlist };
-    categoryPermissions.add(categoryId, perm);
+    categoryPermissions.add(categoryId, { readAllowlist; commentAllowlist });
   };
 
-  // FOLLOWS
+  // ── Follows ─────────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func followUser(targetUserId : Text) : async () {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can follow others");
     };
-
     let userId = caller.toText();
-    if (userId == targetUserId) {
-      Runtime.trap("Cannot follow yourself");
-    };
-
+    if (userId == targetUserId) { Runtime.trap("Cannot follow yourself") };
     switch (follows.get(userId)) {
-      case (?followingSet) {
-        followingSet.add(targetUserId);
-      };
+      case (?fs) { fs.add(targetUserId) };
       case (null) {
         let newSet = Set.empty<Text>();
         newSet.add(targetUserId);
@@ -813,12 +778,9 @@ actor {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can unfollow others");
     };
-
     let userId = caller.toText();
     switch (follows.get(userId)) {
-      case (?followingSet) {
-        followingSet.remove(targetUserId);
-      };
+      case (?fs) { fs.remove(targetUserId) };
       case (null) {};
     };
   };
@@ -826,16 +788,14 @@ actor {
   public query ({ caller }) func getFollowers(userId : Text) : async [Text] {
     let followersList = List.empty<Text>();
     for ((followerId, followingSet) in follows.entries()) {
-      if (followingSet.contains(userId)) {
-        followersList.add(followerId);
-      };
+      if (followingSet.contains(userId)) { followersList.add(followerId) };
     };
     followersList.toArray();
   };
 
   public query ({ caller }) func getFollowing(userId : Text) : async [Text] {
     switch (follows.get(userId)) {
-      case (?followingSet) { followingSet.toArray() };
+      case (?fs) { fs.toArray() };
       case (null) { [] };
     };
   };
