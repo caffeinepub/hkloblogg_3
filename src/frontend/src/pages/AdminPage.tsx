@@ -141,7 +141,7 @@ export default function AdminPage() {
 }
 
 function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
-  const { data: users, isLoading } = useListUsers();
+  const { data: users, isLoading, error } = useListUsers();
   const updateRoleMutation = useUpdateUserRole();
   const blockMutation = useBlockUser();
 
@@ -153,6 +153,18 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         ))}
       </div>
     );
+
+  if (error) {
+    return (
+      <p
+        className="text-center py-8 text-destructive text-sm"
+        data-ocid="admin.users.error_state"
+      >
+        Fel vid laddning av användare:{" "}
+        {error instanceof Error ? error.message : String(error)}
+      </p>
+    );
+  }
 
   return (
     <div data-ocid="admin.users.table">
@@ -195,7 +207,11 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                         { userId: user.alias, newRole: val as BlogRole },
                         {
                           onSuccess: () => toast.success("Roll uppdaterad"),
-                          onError: () => toast.error("Fel"),
+                          onError: (err) => {
+                            const msg =
+                              err instanceof Error ? err.message : String(err);
+                            toast.error(`Fel vid rollbyte: ${msg}`);
+                          },
                         },
                       )
                     }
@@ -230,7 +246,11 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                           toast.success(
                             user.isBlocked ? "Avblockerad" : "Blockerad",
                           ),
-                        onError: () => toast.error("Fel"),
+                        onError: (err) => {
+                          const msg =
+                            err instanceof Error ? err.message : String(err);
+                          toast.error(`Fel: ${msg}`);
+                        },
                       },
                     )
                   }
@@ -285,8 +305,10 @@ function CategoriesTab() {
       setNewCat("");
       setNewCatHidden(false);
       toast.success("Kategori tillagd");
-    } catch {
-      toast.error("Kunde inte lägga till kategori");
+    } catch (err) {
+      console.error("[Admin] addCategory error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Kunde inte lägga till kategori: ${msg}`);
     }
   };
 
@@ -368,7 +390,11 @@ function CategoriesTab() {
                 onClick={() =>
                   deleteMutation.mutate(cat.id, {
                     onSuccess: () => toast.success("Kategori borttagen"),
-                    onError: () => toast.error("Kunde inte ta bort"),
+                    onError: (err) => {
+                      const msg =
+                        err instanceof Error ? err.message : String(err);
+                      toast.error(`Kunde inte ta bort: ${msg}`);
+                    },
                   })
                 }
                 data-ocid={`admin.categories.delete_button.${i + 1}`}
@@ -460,7 +486,10 @@ function CategoryPermissionCard({
           toast.success(
             category.isHidden ? "Kategori synlig" : "Kategori dold",
           ),
-        onError: () => toast.error("Kunde inte ändra synlighet"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Kunde inte ändra synlighet: ${msg}`);
+        },
       },
     );
   };
@@ -479,7 +508,10 @@ function CategoryPermissionCard({
           setReadInput("");
           toast.success(`${username} tillagd i läsalista`);
         },
-        onError: () => toast.error("Fel vid uppdatering"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Fel vid uppdatering: ${msg}`);
+        },
       },
     );
   };
@@ -493,7 +525,10 @@ function CategoryPermissionCard({
       },
       {
         onSuccess: () => toast.success(`${username} borttagen från läsalista`),
-        onError: () => toast.error("Fel vid uppdatering"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Fel vid uppdatering: ${msg}`);
+        },
       },
     );
   };
@@ -507,7 +542,10 @@ function CategoryPermissionCard({
       },
       {
         onSuccess: () => toast.success("Läsbegränsning rensad"),
-        onError: () => toast.error("Fel vid uppdatering"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Fel vid uppdatering: ${msg}`);
+        },
       },
     );
   };
@@ -526,7 +564,10 @@ function CategoryPermissionCard({
           setCommentInput("");
           toast.success(`${username} tillagd i kommentarlista`);
         },
-        onError: () => toast.error("Fel vid uppdatering"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Fel vid uppdatering: ${msg}`);
+        },
       },
     );
   };
@@ -541,7 +582,10 @@ function CategoryPermissionCard({
       {
         onSuccess: () =>
           toast.success(`${username} borttagen från kommentarlista`),
-        onError: () => toast.error("Fel vid uppdatering"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Fel vid uppdatering: ${msg}`);
+        },
       },
     );
   };
@@ -555,7 +599,10 @@ function CategoryPermissionCard({
       },
       {
         onSuccess: () => toast.success("Kommentarbegränsning rensad"),
-        onError: () => toast.error("Fel vid uppdatering"),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Fel vid uppdatering: ${msg}`);
+        },
       },
     );
   };
