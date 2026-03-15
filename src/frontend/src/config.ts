@@ -82,20 +82,8 @@ export async function loadConfig(): Promise<Config> {
 
 function extractAgentErrorMessage(error: string): string {
   const errorString = String(error);
-
-  // Try multiple patterns to extract the meaningful message
-  const patterns = [
-    /with message:\s*'([^']+)'/s,
-    /Reject message:\s*(.+?)(?:\n|$)/,
-    /trapped with message:\s*(.+?)(?:\n|$)/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = errorString.match(pattern);
-    if (match) return match[1].trim();
-  }
-
-  return errorString;
+  const match = errorString.match(/with message:\s*'([^']+)'/s);
+  return match ? match[1] : errorString;
 }
 
 function processError(e: unknown): never {
