@@ -197,7 +197,10 @@ export function useLikePost() {
     mutationFn: async ({
       postId,
       liked,
-    }: { postId: string; liked: boolean }) => {
+    }: {
+      postId: string;
+      liked: boolean;
+    }) => {
       if (!actor) throw new Error("No actor");
       if (liked) await actor.unlikePost(postId);
       else await actor.likePost(postId);
@@ -217,7 +220,11 @@ export function useAddComment() {
       postId,
       text,
       imageBlob,
-    }: { postId: string; text: string; imageBlob: any }) => {
+    }: {
+      postId: string;
+      text: string;
+      imageBlob: any;
+    }) => {
       if (!actor) throw new Error("No actor");
       return actor.addComment(postId, text, imageBlob);
     },
@@ -234,7 +241,10 @@ export function useDeleteComment() {
     mutationFn: async ({
       commentId,
       postId: _postId,
-    }: { commentId: string; postId: string }) => {
+    }: {
+      commentId: string;
+      postId: string;
+    }) => {
       if (!actor) throw new Error("No actor");
       return actor.deleteComment(commentId);
     },
@@ -251,7 +261,10 @@ export function useLikeComment() {
     mutationFn: async ({
       commentId,
       postId: _postId,
-    }: { commentId: string; postId: string }) => {
+    }: {
+      commentId: string;
+      postId: string;
+    }) => {
       if (!actor) throw new Error("No actor");
       return actor.likeComment(commentId);
     },
@@ -353,7 +366,10 @@ export function useFollowUser() {
     mutationFn: async ({
       targetUserId,
       isFollowing,
-    }: { targetUserId: string; isFollowing: boolean }) => {
+    }: {
+      targetUserId: string;
+      isFollowing: boolean;
+    }) => {
       if (!actor) throw new Error("No actor");
       if (isFollowing) await actor.unfollowUser(targetUserId);
       else await actor.followUser(targetUserId);
@@ -384,7 +400,10 @@ export function useBlockUser() {
     mutationFn: async ({
       userId,
       block,
-    }: { userId: string; block: boolean }) => {
+    }: {
+      userId: string;
+      block: boolean;
+    }) => {
       const actor = await createFreshActorForMutation();
       if (block) await actor.blockUser(userId);
       else await actor.unblockUser(userId);
@@ -418,7 +437,10 @@ export function useAddCategory() {
     mutationFn: async ({
       name,
       isHidden,
-    }: { name: string; isHidden: boolean }) => {
+    }: {
+      name: string;
+      isHidden: boolean;
+    }) => {
       const actor = await createFreshActorForMutation();
       return actor.addCategory(name, isHidden);
     },
@@ -471,7 +493,10 @@ export function useSetCategoryVisibility() {
     mutationFn: async ({
       categoryId,
       isHidden,
-    }: { categoryId: string; isHidden: boolean }) => {
+    }: {
+      categoryId: string;
+      isHidden: boolean;
+    }) => {
       const actor = await createFreshActorForMutation();
       return actor.setCategoryVisibility(categoryId, isHidden);
     },

@@ -23,7 +23,11 @@ function Footer() {
   return (
     <footer className="border-t border-border bg-card mt-auto">
       <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-        © {year}. Byggt med <span aria-label="kärlek">❤️</span> med{" "}
+        © {year}. Byggt med{" "}
+        <span role="img" aria-label="kärlek">
+          ❤️
+        </span>{" "}
+        med{" "}
         <a
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${utm}`}
           target="_blank"

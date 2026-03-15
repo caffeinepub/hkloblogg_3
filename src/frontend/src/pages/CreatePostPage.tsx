@@ -225,7 +225,7 @@ export default function CreatePostPage() {
               <div className="space-y-2">
                 {mediaFiles.map((file, i) => (
                   <div
-                    key={`${file.name}-${i}`}
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
                     className="flex items-center gap-2 bg-secondary/50 rounded-lg px-3 py-2"
                   >
                     {file.type.startsWith("video/") ? (
