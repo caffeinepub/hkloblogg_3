@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { backendInterface } from "../backend";
 import { createActorWithConfig } from "../config";
-// CRITICAL FIX: This file MUST use useIdentityStore (Ed25519 identity) for all backend calls.
-// Do NOT replace useIdentityStore with useInternetIdentity -- that will break login.
+// CRITICAL: This file must use identityStore (Ed25519 identity), NOT useInternetIdentity.
+// DO NOT revert to useInternetIdentity -- it causes all backend calls to be anonymous.
 import { useIdentityStore } from "../stores/identityStore";
 import { getSecretParameter } from "../utils/urlParams";
 
@@ -18,6 +18,7 @@ export function useActor() {
     ],
     queryFn: async () => {
       if (!identity) {
+        // Return anonymous actor if not authenticated
         return await createActorWithConfig();
       }
 
@@ -36,6 +37,7 @@ export function useActor() {
     enabled: true,
   });
 
+  // When the actor changes, invalidate dependent queries
   useEffect(() => {
     if (actorQuery.data) {
       queryClient.invalidateQueries({

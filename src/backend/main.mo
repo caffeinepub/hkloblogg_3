@@ -87,6 +87,12 @@ actor {
     name : Text;
   };
 
+  type CategoryView = {
+    id : Text;
+    name : Text;
+    isHidden : Bool;
+  };
+
   type CategoryPermission = {
     readAllowlist : [Text];
     commentAllowlist : [Text];
@@ -129,6 +135,7 @@ actor {
   stable var stableComments : [(Text, StableComment)] = [];
   stable var stableCategories : [(Text, Category)] = [];
   stable var stableCategoryPermissions : [(Text, CategoryPermission)] = [];
+  stable var stableHiddenCategories : [Text] = [];
   stable var stableFollows : [StableFollows] = [];
   stable var stableNextPostId : Nat = 0;
   stable var stableNextCommentId : Nat = 0;
@@ -142,6 +149,7 @@ actor {
   let categories = Map.empty<Text, Category>();
   let follows = Map.empty<Text, Set.Set<Text>>();
   let categoryPermissions = Map.empty<Text, CategoryPermission>();
+  let hiddenCategoriesSet = Set.empty<Text>();
 
   var nextPostId : Nat = stableNextPostId;
   var nextCommentId : Nat = stableNextCommentId;
@@ -173,6 +181,7 @@ actor {
   };
   for ((k, v) in stableCategories.vals()) { categories.add(k, v) };
   for ((k, v) in stableCategoryPermissions.vals()) { categoryPermissions.add(k, v) };
+  for (id in stableHiddenCategories.vals()) { hiddenCategoriesSet.add(id) };
   for (sf in stableFollows.vals()) {
     let followSet = Set.empty<Text>();
     for (f in sf.following.vals()) { followSet.add(f) };
@@ -199,6 +208,7 @@ actor {
     stableUsersByAlias := usersByAlias.entries().toArray();
     stableCategories := categories.entries().toArray();
     stableCategoryPermissions := categoryPermissions.entries().toArray();
+    stableHiddenCategories := hiddenCategoriesSet.toArray();
 
     let postsArr = List.empty<(Text, StablePost)>();
     for ((k, p) in posts.entries()) {
@@ -239,6 +249,7 @@ actor {
     stableComments := [];
     stableCategories := [];
     stableCategoryPermissions := [];
+    stableHiddenCategories := [];
     stableFollows := [];
   };
 
@@ -721,11 +732,12 @@ actor {
 
   // ── Categories ──────────────────────────────────────────────────────────────
 
-  public shared ({ caller }) func addCategory(name : Text) : async () {
+  public shared ({ caller }) func addCategory(name : Text, isHidden : Bool) : async () {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can add categories");
     };
     categories.add(name, { id = name; name = name });
+    if (isHidden) { hiddenCategoriesSet.add(name) };
   };
 
   public shared ({ caller }) func deleteCategory(categoryId : Text) : async () {
@@ -736,8 +748,18 @@ actor {
     categoryPermissions.remove(categoryId);
   };
 
-  public query ({ caller }) func getCategories() : async [Category] {
-    categories.values().toArray();
+  public query ({ caller }) func getCategories() : async [CategoryView] {
+    categories.values().toArray().map(func(cat : Category) : CategoryView {
+      { id = cat.id; name = cat.name; isHidden = hiddenCategoriesSet.contains(cat.id) }
+    });
+  };
+
+  public shared ({ caller }) func setCategoryVisibility(categoryId : Text, isHidden : Bool) : async () {
+    if (not isSuperadmin(caller)) {
+      Runtime.trap("Unauthorized: Only superadmins can set category visibility");
+    };
+    if (isHidden) { hiddenCategoriesSet.add(categoryId) }
+    else { hiddenCategoriesSet.remove(categoryId) };
   };
 
   // ── Category permissions ────────────────────────────────────────────────────

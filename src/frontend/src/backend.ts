@@ -92,6 +92,7 @@ export class ExternalBlob {
 export interface Category {
     id: string;
     name: string;
+    isHidden: boolean;
 }
 export type Time = bigint;
 export interface _CaffeineStorageRefillInformation {
@@ -150,7 +151,10 @@ export interface backendInterface {
     _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    addCategory(name: string): Promise<void>;
+    addCategory(name: string, isHidden: boolean): Promise<void>;
+    getCategoryPermissions(categoryId: string): Promise<{readAllowlist: Array<string>; commentAllowlist: Array<string>}>;
+    setCategoryPermissions(categoryId: string, readAllowlist: Array<string>, commentAllowlist: Array<string>): Promise<void>;
+    setCategoryVisibility(categoryId: string, isHidden: boolean): Promise<void>;
     addComment(postId: string, text: string, imageUrl: ExternalBlob | null): Promise<string>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: string): Promise<void>;
@@ -290,18 +294,55 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async addCategory(arg0: string): Promise<void> {
+    async addCategory(arg0: string, arg1: boolean): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.addCategory(arg0);
+                const result = await this.actor.addCategory(arg0, arg1);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.addCategory(arg0);
+            const result = await this.actor.addCategory(arg0, arg1);
             return result;
+        }
+    }
+    async getCategoryPermissions(arg0: string): Promise<{readAllowlist: Array<string>; commentAllowlist: Array<string>}> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).getCategoryPermissions(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return (this.actor as any).getCategoryPermissions(arg0);
+        }
+    }
+    async setCategoryPermissions(arg0: string, arg1: Array<string>, arg2: Array<string>): Promise<void> {
+        if (this.processError) {
+            try {
+                await (this.actor as any).setCategoryPermissions(arg0, arg1, arg2);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            await (this.actor as any).setCategoryPermissions(arg0, arg1, arg2);
+        }
+    }
+    async setCategoryVisibility(arg0: string, arg1: boolean): Promise<void> {
+        if (this.processError) {
+            try {
+                await (this.actor as any).setCategoryVisibility(arg0, arg1);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            await (this.actor as any).setCategoryVisibility(arg0, arg1);
         }
     }
     async addComment(arg0: string, arg1: string, arg2: ExternalBlob | null): Promise<string> {

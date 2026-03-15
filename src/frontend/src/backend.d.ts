@@ -17,6 +17,7 @@ export class ExternalBlob {
 export interface Category {
     id: string;
     name: string;
+    isHidden: boolean;
 }
 export interface CategoryPermission {
     readAllowlist: Array<string>;
@@ -61,7 +62,7 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    addCategory(name: string): Promise<void>;
+    addCategory(name: string, isHidden: boolean): Promise<void>;
     addComment(postId: string, text: string, imageUrl: ExternalBlob | null): Promise<string>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: string): Promise<void>;
@@ -96,6 +97,7 @@ export interface backendInterface {
     register(alias: string, passwordHash: Uint8Array, salt: Uint8Array): Promise<string>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setCategoryPermissions(categoryId: string, readAllowlist: Array<string>, commentAllowlist: Array<string>): Promise<void>;
+    setCategoryVisibility(categoryId: string, isHidden: boolean): Promise<void>;
     unblockUser(userId: string): Promise<void>;
     unfollowUser(targetUserId: string): Promise<void>;
     unlikePost(postId: string): Promise<void>;

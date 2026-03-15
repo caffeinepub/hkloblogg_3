@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -25,6 +27,7 @@ import {
   Ban,
   CheckCircle,
   Eye,
+  EyeOff,
   Lock,
   Pin,
   Plus,
@@ -50,6 +53,7 @@ import {
   usePosts,
   usePublishPost,
   useSetCategoryPermissions,
+  useSetCategoryVisibility,
   useUpdateUserRole,
 } from "../hooks/useQueries";
 
@@ -269,12 +273,17 @@ function CategoriesTab() {
   const addMutation = useAddCategory();
   const deleteMutation = useDeleteCategory();
   const [newCat, setNewCat] = useState("");
+  const [newCatHidden, setNewCatHidden] = useState(false);
 
   const handleAdd = async () => {
     if (!newCat.trim()) return;
     try {
-      await addMutation.mutateAsync(newCat.trim());
+      await addMutation.mutateAsync({
+        name: newCat.trim(),
+        isHidden: newCatHidden,
+      });
       setNewCat("");
+      setNewCatHidden(false);
       toast.success("Kategori tillagd");
     } catch {
       toast.error("Kunde inte lägga till kategori");
@@ -283,25 +292,49 @@ function CategoriesTab() {
 
   return (
     <div data-ocid="admin.categories.section">
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex flex-col gap-3 mb-6 p-4 rounded-xl bg-muted/30 border border-border/50 max-w-sm">
         <Input
           value={newCat}
           onChange={(e) => setNewCat(e.target.value)}
           placeholder="Ny kategori..."
-          className="max-w-xs"
           data-ocid="admin.categories.input"
           onKeyDown={(e) => {
             if (e.key === "Enter") handleAdd();
           }}
         />
-        <Button
-          onClick={handleAdd}
-          disabled={addMutation.isPending}
-          data-ocid="admin.categories.add.button"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Lägg till
-        </Button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="cat-hidden"
+              checked={newCatHidden}
+              onCheckedChange={setNewCatHidden}
+              data-ocid="admin.categories.hidden.switch"
+            />
+            <Label
+              htmlFor="cat-hidden"
+              className="text-sm cursor-pointer flex items-center gap-1.5"
+            >
+              {newCatHidden ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> Dold
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5 text-muted-foreground" /> Synlig
+                </>
+              )}
+            </Label>
+          </div>
+          <Button
+            onClick={handleAdd}
+            disabled={addMutation.isPending || !newCat.trim()}
+            size="sm"
+            data-ocid="admin.categories.add.button"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Lägg till
+          </Button>
+        </div>
       </div>
       {isLoading ? (
         <div data-ocid="admin.categories.loading_state">
@@ -317,7 +350,18 @@ function CategoriesTab() {
               data-ocid={`admin.categories.item.${i + 1}`}
               className="flex items-center justify-between bg-secondary/40 rounded-lg px-4 py-3"
             >
-              <span className="font-medium">{cat.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{cat.name}</span>
+                {cat.isHidden && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs gap-1 py-0 px-1.5 text-muted-foreground"
+                  >
+                    <EyeOff className="h-3 w-3" />
+                    Dold
+                  </Badge>
+                )}
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
@@ -400,12 +444,26 @@ function CategoryPermissionCard({
 }) {
   const { data: perms, isLoading } = useCategoryPermissions(category.id);
   const setPermsMutation = useSetCategoryPermissions();
+  const visibilityMutation = useSetCategoryVisibility();
 
   const [readInput, setReadInput] = useState("");
   const [commentInput, setCommentInput] = useState("");
 
   const readList = perms?.readAllowlist ?? [];
   const commentList = perms?.commentAllowlist ?? [];
+
+  const handleToggleVisibility = () => {
+    visibilityMutation.mutate(
+      { categoryId: category.id, isHidden: !category.isHidden },
+      {
+        onSuccess: () =>
+          toast.success(
+            category.isHidden ? "Kategori synlig" : "Kategori dold",
+          ),
+        onError: () => toast.error("Kunde inte ändra synlighet"),
+      },
+    );
+  };
 
   const handleAddRead = () => {
     const username = readInput.trim();
@@ -508,16 +566,47 @@ function CategoryPermissionCard({
       className="overflow-hidden"
     >
       <CardHeader className="pb-3 bg-muted/30">
-        <CardTitle className="text-base flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
-            {index}
-          </span>
-          {category.name}
+        <CardTitle className="text-base flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
+              {index}
+            </span>
+            {category.name}
+            {category.isHidden && (
+              <Badge
+                variant="secondary"
+                className="text-xs gap-1 py-0 px-1.5 text-muted-foreground"
+              >
+                <EyeOff className="h-3 w-3" />
+                Dold
+              </Badge>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1.5 shrink-0"
+            onClick={handleToggleVisibility}
+            disabled={visibilityMutation.isPending}
+            data-ocid={`admin.permissions.visibility.toggle.${index}`}
+          >
+            {visibilityMutation.isPending ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : category.isHidden ? (
+              <Eye className="h-3.5 w-3.5" />
+            ) : (
+              <EyeOff className="h-3.5 w-3.5" />
+            )}
+            {category.isHidden ? "Visa kategori" : "Dölj kategori"}
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-4">
         {isLoading ? (
-          <div className="space-y-2">
+          <div
+            className="space-y-2"
+            data-ocid={`admin.permissions.loading_state.${index}`}
+          >
             <Skeleton className="h-8 w-full" />
             <Skeleton className="h-8 w-full" />
           </div>
@@ -560,7 +649,6 @@ function CategoryPermissionCard({
                         type="button"
                         onClick={() => handleRemoveRead(username)}
                         className="ml-0.5 hover:text-destructive transition-colors"
-                        data-ocid={`admin.permissions.read.delete_button.${index}`}
                         aria-label={`Ta bort ${username}`}
                       >
                         <X className="h-3 w-3" />
@@ -635,7 +723,6 @@ function CategoryPermissionCard({
                         type="button"
                         onClick={() => handleRemoveComment(username)}
                         className="ml-0.5 hover:text-destructive transition-colors"
-                        data-ocid={`admin.permissions.comment.delete_button.${index}`}
                         aria-label={`Ta bort ${username}`}
                       >
                         <X className="h-3 w-3" />

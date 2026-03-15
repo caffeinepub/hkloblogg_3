@@ -14,6 +14,7 @@ export default function FeedPage() {
   const [activeCat, setActiveCat] = useState<string>("all");
 
   const isLoading = postsLoading || catsLoading;
+  const visibleCategories = (categories ?? []).filter((c) => !c.isHidden);
   const publishedPosts = (posts ?? []).filter((p) => p.isPublished);
   const filtered =
     activeCat === "all"
@@ -66,7 +67,7 @@ export default function FeedPage() {
             <Sparkles className="h-3 w-3 mr-1" />
             Alla
           </button>
-          {(categories ?? []).map((cat) => (
+          {visibleCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
@@ -121,7 +122,7 @@ export default function FeedPage() {
             <PostCard
               key={post.id}
               post={post}
-              categories={categories ?? []}
+              categories={visibleCategories}
               index={i + 1}
             />
           ))}

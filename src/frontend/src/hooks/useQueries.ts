@@ -355,9 +355,12 @@ export function useAddCategory() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async ({
+      name,
+      isHidden,
+    }: { name: string; isHidden: boolean }) => {
       if (!actor) throw new Error("No actor");
-      return actor.addCategory(name);
+      return actor.addCategory(name, isHidden);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
   });
@@ -412,7 +415,7 @@ export function useCategoryPermissions(categoryId: string) {
     queryKey: ["categoryPermissions", categoryId],
     queryFn: async () => {
       if (!actor) return { readAllowlist: [], commentAllowlist: [] };
-      return (actor as any).getCategoryPermissions(categoryId);
+      return actor.getCategoryPermissions(categoryId);
     },
     enabled: !!actor && !isFetching && !!categoryId,
   });
@@ -428,7 +431,7 @@ export function useSetCategoryPermissions() {
       commentAllowlist: string[];
     }) => {
       if (!actor) throw new Error("No actor");
-      return (actor as any).setCategoryPermissions(
+      return actor.setCategoryPermissions(
         vars.categoryId,
         vars.readAllowlist,
         vars.commentAllowlist,
@@ -439,5 +442,20 @@ export function useSetCategoryPermissions() {
         queryKey: ["categoryPermissions", vars.categoryId],
       });
     },
+  });
+}
+
+export function useSetCategoryVisibility() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      categoryId,
+      isHidden,
+    }: { categoryId: string; isHidden: boolean }) => {
+      if (!actor) throw new Error("No actor");
+      return actor.setCategoryVisibility(categoryId, isHidden);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
   });
 }
