@@ -1,27 +1,33 @@
 # HKLOblogg
 
 ## Current State
-Backend state variables (`users`, `posts`, `comments`, `categories`, `follows`, `categoryPermissions`, etc.) are declared with `let` (non-stable mutable maps). This causes all data to be wiped on every canister upgrade/deployment.
+Full-stack blog platform with posts, comments, categories, user roles, and admin panel. Navigation bar exists in Navbar.tsx with links and user menu. Data is fetched via hooks in useQueries.ts using useAppActor. Backend supports getPosts, getCategories, getCommentsForPost, listUsers, getCategoryPermissions.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Stable backing arrays for all persistent data (users, posts, comments, categories, follows, categoryPermissions, counters)
-- `system func preupgrade()` that serializes all runtime state into stable arrays before upgrade
-- `system func postupgrade()` that restores runtime state from stable arrays after upgrade
-- Stable record types (`StablePost`, `StableComment`, `StableFollows`) that use `[Text]` arrays instead of `Set.Set<Text>` for likes/follows (since Sets are not directly stable)
+- Search bar in the Navbar (always visible, between center nav and right side)
+- SearchPage component at route /search showing results divided into sections: Inlägg, Kategorier, Kommentarer, Alias
+- Search filters: free text input, OR/AND toggle, date range (from/to) pickers
+- Comment filter: checkbox "Bara mina kommentarer" (only logged-in user's comments)
+- Search respects permissions: only shows non-hidden categories (or hidden categories where user has explicit rights), only published posts
+- Route /search added to App.tsx
 
 ### Modify
-- All Map/Set runtime variables remain mutable (for performance) but are backed by stable arrays
-- `initCategories()` only runs if categories are empty (avoids re-initializing on upgrade)
+- Navbar.tsx: add search input field that navigates to /search?q=... on submit
+- App.tsx: add searchRoute for /search
 
 ### Remove
-- Nothing removed from functionality
+- Nothing removed
 
 ## Implementation Plan
-1. Define stable record types for Post, Comment, and Follows serialization
-2. Declare `stable var` arrays for all data: stableUsers, stablePosts, stableComments, stableCategories, stableFollows, stableCategoryPermissions, stableNextPostId, stableNextCommentId
-3. Initialize runtime maps from stable arrays on startup (postupgrade logic inline)
-4. Implement `preupgrade` to flush runtime maps to stable arrays
-5. Implement `postupgrade` to restore runtime maps from stable arrays and clear temp storage
-6. Ensure `initCategories()` is guarded to only run when categories map is empty
+1. Create SearchPage.tsx with:
+   - Text input for search query
+   - OR/AND toggle button
+   - Date range (from/to) date pickers
+   - "Bara mina kommentarer" checkbox (visible when logged in)
+   - Results sections: Inlägg, Kategorier, Kommentarer, Alias
+   - Client-side filtering of posts, categories, comments (fetched from existing queries), users (listUsers)
+   - Permission-aware category filtering using accessible categories logic
+2. Update Navbar.tsx: add compact search input that navigates to /search on submit or enter
+3. Update App.tsx: add /search route

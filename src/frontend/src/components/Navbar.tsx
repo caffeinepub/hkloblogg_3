@@ -7,15 +7,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BookOpen,
   ChevronDown,
   PenSquare,
   Rss,
+  Search,
   Shield,
   Users,
 } from "lucide-react";
+import { useState } from "react";
 import { BlogRole } from "../backend.d";
 import { useAuth } from "../context/AuthContext";
 
@@ -25,6 +28,8 @@ export default function Navbar() {
   const { location } = useRouterState();
   const pathname = location.pathname;
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   const isAdmin =
     currentUser?.profile.blogRole === BlogRole.superadmin ||
     currentUser?.profile.blogRole === BlogRole.moderator;
@@ -32,6 +37,13 @@ export default function Navbar() {
   const handleLogout = () => {
     logout();
     navigate({ to: "/" });
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate({ to: "/search", search: { q: searchQuery.trim() } });
+    }
   };
 
   return (
@@ -98,8 +110,35 @@ export default function Navbar() {
           )}
         </nav>
 
+        {/* Search bar - desktop only */}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="hidden md:flex items-center relative flex-1 max-w-xs"
+        >
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            data-ocid="nav.search_input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Sök..."
+            className="pl-9 h-8 text-sm bg-secondary/50 border-border/50 focus:bg-background"
+          />
+        </form>
+
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* Mobile search icon */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="md:hidden"
+            data-ocid="nav.search.button"
+            onClick={() => navigate({ to: "/search" })}
+            type="button"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+
           {currentUser ? (
             <>
               <Button

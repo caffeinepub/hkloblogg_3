@@ -230,6 +230,8 @@ export interface backendInterface {
 }
 
 import type {
+  _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation,
+  _CaffeineStorageRefillResult as __CaffeineStorageRefillResult,
   BlogRole as _BlogRole,
   CommentView as _CommentView,
   ExternalBlob as _ExternalBlob,
@@ -237,8 +239,6 @@ import type {
   Time as _Time,
   UserProfile as _UserProfile,
   UserRole as _UserRole,
-  _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation,
-  _CaffeineStorageRefillResult as __CaffeineStorageRefillResult,
 } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
   constructor(

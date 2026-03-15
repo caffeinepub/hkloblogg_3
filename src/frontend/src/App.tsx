@@ -16,6 +16,7 @@ import LoginPage from "./pages/LoginPage";
 import PostDetailPage from "./pages/PostDetailPage";
 import ProfilePage from "./pages/ProfilePage";
 import RegisterPage from "./pages/RegisterPage";
+import SearchPage from "./pages/SearchPage";
 
 function Footer() {
   const year = new Date().getFullYear();
@@ -107,6 +108,11 @@ const adminRoute = createRoute({
   path: "/admin",
   component: AdminPage,
 });
+const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/search",
+  component: SearchPage,
+});
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -118,6 +124,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   adminRoute,
+  searchRoute,
 ]);
 
 const router = createRouter({ routeTree });
