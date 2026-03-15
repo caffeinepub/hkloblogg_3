@@ -8,12 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Image, Loader2, Upload, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ExternalBlob } from "../backend";
+import { RichTextEditor } from "../components/RichTextEditor";
 import { useAuth } from "../context/AuthContext";
 import {
   useAccessibleCategories,
@@ -90,7 +90,7 @@ export default function CreatePostPage() {
       setError("Titel krävs.");
       return;
     }
-    if (!body.trim()) {
+    if (!body.replace(/<[^>]*>/g, "").trim()) {
       setError("Innehåll krävs.");
       return;
     }
@@ -127,7 +127,6 @@ export default function CreatePostPage() {
           categoryId,
           mediaUrls: mediaBlobs,
         });
-        // Publish the post immediately after creating it
         await publishMutation.mutateAsync(newId);
         toast.success("Inlägg publicerat!");
         navigate({ to: "/post/$id", params: { id: newId } });
@@ -185,17 +184,15 @@ export default function CreatePostPage() {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="body">Innehåll</Label>
-            <Textarea
-              id="body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Skriv ditt inlägg här..."
-              rows={10}
-              className="resize-y min-h-[200px]"
-              data-ocid="create_post.body.textarea"
-              required
-            />
+            <Label>Innehåll</Label>
+            <div data-ocid="create_post.body.editor">
+              <RichTextEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Skriv ditt inlägg här..."
+                minHeight={200}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Media (valfritt)</Label>

@@ -1,29 +1,43 @@
 # HKLOblogg
 
 ## Current State
-Adminpanelens Användare-flik har blockera/avblockera-knappar men de misslyckas med "User not found" eftersom frontend skickar `alias` (från `UserProfile`) till `blockUser(userId: Text)` som förväntar sig principal-ID. Det finns ingen raderingsknapp för superadmin.
+- CreatePostPage uses a plain `<Textarea>` for the post body
+- PostDetailPage uses a plain `<Textarea>` for comment input
+- Post body is rendered as plain text with `whitespace-pre-wrap`
+- `react-quill-new` (v3.4.6) is already installed in package.json
+- No rich text editor exists anywhere in the app
 
 ## Requested Changes (Diff)
 
 ### Add
-- `userId` fält i `UserProfile`-typen i Motoko, `backend.did.js`, och `backend.d.ts`
-- `adminDeleteUser(userId: Text)` i Motoko -- tar bort konto, alla inlägg och alla kommentarer av användaren
-- `useAdminDeleteUser` mutation hook i `useQueries.ts`
-- Raderingsknapp (med bekräftelsedialog) i `UsersTab` i `AdminPage.tsx`, synlig bara för superadmin
+- `RichTextEditor` component wrapping react-quill-new with a full toolbar:
+  - Formatting: bold, italic, underline, strikethrough
+  - Headings: H1, H2, H3
+  - Lists: bullet, ordered
+  - Blockquote, code block
+  - Link insertion
+  - Emoji picker (with search, using a custom emoji picker UI)
+  - Undo/redo
+  - Clear formatting
+- `EmojiPicker` sub-component that opens a popover with emoji grid + search
+- CSS for Quill editor styled to match the app's light blue/gray palette
+- Rendered HTML display for post body and comment text (using `dangerouslySetInnerHTML` with sanitization)
 
 ### Modify
-- `listUsers()` i Motoko returnerar nu `userId` i varje `UserProfile`
-- `useBlockUser` i `useQueries.ts` skickar nu `userId` (principal) istället för alias
-- `UsersTab` i `AdminPage.tsx` hämtar `userId` från `user.userId` och skickar det till blockera/raderamutationer
-- `backend.did.js` -- `UserProfile` IDL inkluderar `userId: IDL.Text`
-- `backend.d.ts` -- `UserProfile` interface inkluderar `userId: string`
+- `CreatePostPage.tsx`: replace `<Textarea>` body field with `<RichTextEditor>`, update `body` state to hold HTML string
+- `PostDetailPage.tsx`:
+  - Replace comment `<Textarea>` with `<RichTextEditor>`
+  - Render `post.body` as HTML instead of plain text
+  - Render `comment.text` as HTML instead of plain text
 
 ### Remove
-- Inget tas bort
+- `whitespace-pre-wrap` plain text rendering of post body
 
 ## Implementation Plan
-1. Uppdatera Motoko: lägg till `userId` i `UserProfile`, uppdatera `listUsers`, lägg till `adminDeleteUser`
-2. Uppdatera `backend.did.js`: `UserProfile` IDL med `userId: IDL.Text`
-3. Uppdatera `backend.d.ts`: `UserProfile` interface med `userId: string`
-4. Uppdatera `useQueries.ts`: `useAdminDeleteUser` hook, rätta `useBlockUser` att använda userId
-5. Uppdatera `AdminPage.tsx`: skicka `user.userId` till blockera-mutation, lägg till raderingsknapp för superadmin
+1. Install no new packages (react-quill-new already present)
+2. Create `src/frontend/src/components/RichTextEditor.tsx` with Quill editor + custom toolbar including emoji picker
+3. Create `src/frontend/src/components/EmojiPicker.tsx` with a popover grid of common emojis with search
+4. Add Quill CSS import (react-quill-new/dist/quill.snow.css) and override styles to match design system
+5. Update `CreatePostPage.tsx` to use `<RichTextEditor>` for body
+6. Update `PostDetailPage.tsx` to use `<RichTextEditor>` for comment input and render HTML for post body and comments
+7. Validate and fix any lint/type errors

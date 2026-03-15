@@ -232,8 +232,6 @@ export interface backendInterface {
 }
 
 import type {
-  _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation,
-  _CaffeineStorageRefillResult as __CaffeineStorageRefillResult,
   BlogRole as _BlogRole,
   CommentView as _CommentView,
   ExternalBlob as _ExternalBlob,
@@ -241,6 +239,8 @@ import type {
   Time as _Time,
   UserProfile as _UserProfile,
   UserRole as _UserRole,
+  _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation,
+  _CaffeineStorageRefillResult as __CaffeineStorageRefillResult,
 } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
   constructor(
@@ -1152,16 +1152,19 @@ function from_candid_record_n15(
   _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>,
   _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>,
   value: {
+    userId: string;
     alias: string;
     isBlocked: boolean;
     blogRole: _BlogRole;
   },
 ): {
+  userId: string;
   alias: string;
   isBlocked: boolean;
   blogRole: BlogRole;
 } {
   return {
+    userId: value.userId,
     alias: value.alias,
     isBlocked: value.isBlocked,
     blogRole: from_candid_BlogRole_n16(
@@ -1440,16 +1443,19 @@ function to_candid_record_n32(
   _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>,
   _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>,
   value: {
+    userId: string;
     alias: string;
     isBlocked: boolean;
     blogRole: BlogRole;
   },
 ): {
+  userId: string;
   alias: string;
   isBlocked: boolean;
   blogRole: _BlogRole;
 } {
   return {
+    userId: value.userId,
     alias: value.alias,
     isBlocked: value.isBlocked,
     blogRole: to_candid_BlogRole_n33(

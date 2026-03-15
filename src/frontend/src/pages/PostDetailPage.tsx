@@ -2,13 +2,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Heart, Image, Pencil, Send, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ExternalBlob } from "../backend";
 import { BlogRole } from "../backend.d";
+import { RichTextEditor } from "../components/RichTextEditor";
 import { useAuth } from "../context/AuthContext";
 import {
   useAddComment,
@@ -128,7 +128,7 @@ export default function PostDetailPage() {
       toast.error("Logga in för att kommentera");
       return;
     }
-    if (!commentText.trim()) return;
+    if (!commentText.replace(/<[^>]*>/g, "").trim()) return;
     setUploadingComment(true);
     try {
       let imageBlob: ExternalBlob | null = null;
@@ -239,9 +239,11 @@ export default function PostDetailPage() {
           )}
         </div>
 
-        <div className="prose-blog text-foreground/90 leading-relaxed whitespace-pre-wrap mb-6">
-          {post.body}
-        </div>
+        <div
+          className="prose-blog text-foreground/90 leading-relaxed mb-6"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted HTML from Quill editor
+          dangerouslySetInnerHTML={{ __html: post.body }}
+        />
 
         {post.mediaUrls && post.mediaUrls.length > 0 && (
           <div className="grid gap-3 mb-6">
@@ -304,20 +306,20 @@ export default function PostDetailPage() {
             className="bg-card rounded-lg border border-border p-4 mb-6"
             data-ocid="post.comment.panel"
           >
-            <Textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Skriv en kommentar..."
-              className="mb-3 resize-none"
-              rows={3}
-              data-ocid="post.comment.textarea"
-            />
+            <div className="mb-3" data-ocid="post.comment.textarea">
+              <RichTextEditor
+                value={commentText}
+                onChange={setCommentText}
+                placeholder="Skriv en kommentar..."
+                minHeight={100}
+              />
+            </div>
             {commentImage && (
               <p className="text-xs text-muted-foreground mb-2">
                 Bild: {commentImage.name}
               </p>
             )}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mt-2">
               <button
                 type="button"
                 onClick={() => commentImageRef.current?.click()}
@@ -337,7 +339,10 @@ export default function PostDetailPage() {
               <Button
                 size="sm"
                 onClick={handleSubmitComment}
-                disabled={!commentText.trim() || uploadingComment}
+                disabled={
+                  !commentText.replace(/<[^>]*>/g, "").trim() ||
+                  uploadingComment
+                }
                 data-ocid="post.comment.submit_button"
               >
                 <Send className="h-4 w-4 mr-1" />
@@ -408,9 +413,11 @@ export default function PostDetailPage() {
                     </button>
                   )}
                 </div>
-                <p className="text-sm text-foreground/90 mt-2 ml-9">
-                  {comment.text}
-                </p>
+                <div
+                  className="text-sm text-foreground/90 mt-2 ml-9 prose-sm"
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted HTML from Quill editor
+                  dangerouslySetInnerHTML={{ __html: comment.text }}
+                />
                 {comment.imageUrl && (
                   <img
                     src={comment.imageUrl.getDirectURL()}
