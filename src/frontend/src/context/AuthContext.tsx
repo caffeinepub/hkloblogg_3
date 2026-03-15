@@ -1,3 +1,10 @@
+/**
+ * AuthContext - handles alias+password login/register using Ed25519 identities.
+ *
+ * IMPORTANT: This file does NOT use useActor. It creates actors directly via
+ * createAuthenticatedActor so it is not affected when useActor.ts is
+ * overwritten by the platform on new builds.
+ */
 import { Ed25519KeyIdentity } from "@dfinity/identity";
 import {
   type ReactNode,
@@ -8,7 +15,6 @@ import {
 } from "react";
 import type { UserProfile } from "../backend.d";
 import { createActorWithConfig } from "../config";
-import { useActor } from "../hooks/useActor";
 import { useIdentityStore } from "../stores/identityStore";
 import {
   deriveIdentityFromCredentials,
@@ -38,24 +44,21 @@ const SESSION_KEY = "hkloblogg_session";
 async function createAuthenticatedActor(identity: Ed25519KeyIdentity) {
   const actor = await createActorWithConfig({ agentOptions: { identity } });
   try {
-    const adminToken = getSecretParameter("caffeineAdminToken") || "";
+    const adminToken = getSecretParameter("caffeineAdminToken") ?? "";
     await actor._initializeAccessControlWithSecret(adminToken);
   } catch {
-    // Not admin – that's fine
+    // Not admin -- that's fine
   }
   return actor;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { isFetching } = useActor();
   const setStoredIdentity = useIdentityStore((s) => s.setIdentity);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session on mount
+  // Restore session on mount (no dependency on useActor)
   useEffect(() => {
-    if (isFetching) return;
-
     const stored = localStorage.getItem(SESSION_KEY);
     if (!stored) {
       setIsLoading(false);
@@ -74,31 +77,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const tempActor = await createAuthenticatedActor(identity);
         const profile = await tempActor
           .getCallerUserProfile()
-          .catch(() => null);
+          .catch((sessionErr: unknown) => {
+            console.error(
+              "[AuthContext] Session restore - getCallerUserProfile failed:",
+              sessionErr,
+            );
+            console.error(
+              "[AuthContext] Session restore error type:",
+              typeof sessionErr,
+              sessionErr instanceof Error ? "is Error" : "not Error",
+            );
+            console.error(
+              "[AuthContext] Session restore error message:",
+              (sessionErr as any)?.message,
+            );
+            console.error(
+              "[AuthContext] Session restore error string:",
+              String(sessionErr),
+            );
+            try {
+              console.error(
+                "[AuthContext] Session restore error JSON:",
+                JSON.stringify(sessionErr),
+              );
+            } catch {}
+            return null;
+          });
         if (profile) {
           setStoredIdentity(identity);
           setCurrentUser({ alias: parsed.alias, profile });
         } else {
           localStorage.removeItem(SESSION_KEY);
         }
-      } catch {
+      } catch (sessionErr: unknown) {
+        console.error("[AuthContext] Session restore failed:", sessionErr);
+        console.error(
+          "[AuthContext] Session restore error type:",
+          typeof sessionErr,
+          sessionErr instanceof Error ? "is Error" : "not Error",
+        );
+        console.error(
+          "[AuthContext] Session restore error message:",
+          (sessionErr as any)?.message,
+        );
+        console.error(
+          "[AuthContext] Session restore error string:",
+          String(sessionErr),
+        );
+        try {
+          console.error(
+            "[AuthContext] Session restore error JSON:",
+            JSON.stringify(sessionErr),
+          );
+        } catch {}
         localStorage.removeItem(SESSION_KEY);
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [isFetching, setStoredIdentity]);
+  }, [setStoredIdentity]);
 
   const login = async (alias: string, password: string) => {
-    // Derive deterministic identity from credentials
     const identity = await deriveIdentityFromCredentials(alias, password);
     const tempActor = await createAuthenticatedActor(identity);
 
-    // Calling login() verifies the account exists under this principal
     try {
       const hash = new Uint8Array(32);
       await tempActor.login(hash);
-    } catch (e) {
+    } catch (e: unknown) {
+      // --- Detailed error logging ---
+      console.error("[AuthContext] login() caught error:", e);
+      console.error(
+        "[AuthContext] Error type:",
+        typeof e,
+        e instanceof Error ? "is Error" : "not Error",
+      );
+      console.error("[AuthContext] Error message:", (e as any)?.message);
+      console.error("[AuthContext] Error string:", String(e));
+      try {
+        console.error("[AuthContext] Error JSON:", JSON.stringify(e));
+      } catch {}
+      // --- End detailed error logging ---
+
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("User not found")) {
         throw new Error(
@@ -108,7 +168,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (msg.includes("blocked")) {
         throw new Error("Ditt konto \u00e4r blockerat.");
       }
-      throw new Error("Inloggning misslyckades. Kontrollera dina uppgifter.");
+      // Show the actual error detail on screen so it can be reported
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new Error(`Inloggning misslyckades: ${detail}`);
     }
 
     const profile = await tempActor.getCallerUserProfile().catch(() => null);
