@@ -1,5 +1,17 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "ignore": [
+      "**/backend.ts",
+      "**/backend.d.ts",
+      "dist/**",
+      "node_modules/**",
+      "build/**",
+      "*.config.js",
+      "src/declarations/**",
+      "src/config.ts"
+    ]
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -27,22 +39,5 @@
       "quoteStyle": "double",
       "semicolons": "always"
     }
-  },
-  "overrides": [
-    {
-      "include": ["**/backend.ts", "**/backend.d.ts", "**/config.ts", "src/declarations/**", "**/*.config.js"],
-      "linter": { "enabled": false },
-      "formatter": { "enabled": false }
-    },
-    {
-      "include": ["**/components/ui/**"],
-      "linter": {
-        "rules": {
-          "a11y": {
-            "useSemanticElements": "off"
-          }
-        }
-      }
-    }
-  ]
+  }
 }
