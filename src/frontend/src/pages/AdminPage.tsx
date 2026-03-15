@@ -292,6 +292,7 @@ function CategoriesTab() {
   const { data: categories, isLoading } = useCategories();
   const addMutation = useAddCategory();
   const deleteMutation = useDeleteCategory();
+  const visibilityMutation = useSetCategoryVisibility();
   const [newCat, setNewCat] = useState("");
   const [newCatHidden, setNewCatHidden] = useState(false);
 
@@ -324,29 +325,32 @@ function CategoriesTab() {
             if (e.key === "Enter") handleAdd();
           }}
         />
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Switch
-              id="cat-hidden"
-              checked={newCatHidden}
-              onCheckedChange={setNewCatHidden}
-              data-ocid="admin.categories.hidden.switch"
-            />
-            <Label
-              htmlFor="cat-hidden"
-              className="text-sm cursor-pointer flex items-center gap-1.5"
+        <div className="flex items-center justify-between gap-2">
+          <Select
+            value={newCatHidden ? "hidden" : "visible"}
+            onValueChange={(val) => setNewCatHidden(val === "hidden")}
+          >
+            <SelectTrigger
+              className="flex-1 h-9 text-sm"
+              data-ocid="admin.categories.visibility.select"
             >
-              {newCatHidden ? (
-                <>
-                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> Dold
-                </>
-              ) : (
-                <>
-                  <Eye className="h-3.5 w-3.5 text-muted-foreground" /> Synlig
-                </>
-              )}
-            </Label>
-          </div>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="visible">
+                <span className="flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                  Visa på hemsida
+                </span>
+              </SelectItem>
+              <SelectItem value="hidden">
+                <span className="flex items-center gap-1.5">
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                  Visa inte på hemsida
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             onClick={handleAdd}
             disabled={addMutation.isPending || !newCat.trim()}
@@ -370,20 +374,53 @@ function CategoriesTab() {
             <div
               key={cat.id}
               data-ocid={`admin.categories.item.${i + 1}`}
-              className="flex items-center justify-between bg-secondary/40 rounded-lg px-4 py-3"
+              className="flex items-center justify-between bg-secondary/40 rounded-lg px-4 py-3 gap-3"
             >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{cat.name}</span>
-                {cat.isHidden && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs gap-1 py-0 px-1.5 text-muted-foreground"
-                  >
-                    <EyeOff className="h-3 w-3" />
-                    Dold
-                  </Badge>
-                )}
-              </div>
+              <span className="font-medium flex-1 min-w-0 truncate">
+                {cat.name}
+              </span>
+              <Select
+                value={cat.isHidden ? "hidden" : "visible"}
+                onValueChange={(val) =>
+                  visibilityMutation.mutate(
+                    { categoryId: cat.id, isHidden: val === "hidden" },
+                    {
+                      onSuccess: () =>
+                        toast.success(
+                          val === "hidden"
+                            ? `"${cat.name}" dold från hemsidan`
+                            : `"${cat.name}" visas nu på hemsidan`,
+                        ),
+                      onError: (err) => {
+                        const msg =
+                          err instanceof Error ? err.message : String(err);
+                        toast.error(`Kunde inte ändra synlighet: ${msg}`);
+                      },
+                    },
+                  )
+                }
+              >
+                <SelectTrigger
+                  className="w-44 h-8 text-sm shrink-0"
+                  data-ocid={`admin.categories.visibility.select.${i + 1}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="visible">
+                    <span className="flex items-center gap-1.5">
+                      <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                      Visa på hemsida
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="hidden">
+                    <span className="flex items-center gap-1.5">
+                      <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                      Visa inte på hemsida
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
               <Button
                 variant="ghost"
                 size="sm"
@@ -398,7 +435,7 @@ function CategoriesTab() {
                   })
                 }
                 data-ocid={`admin.categories.delete_button.${i + 1}`}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>

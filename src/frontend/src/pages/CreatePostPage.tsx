@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { ExternalBlob } from "../backend";
 import { useAuth } from "../context/AuthContext";
 import {
-  useCategories,
+  useAccessibleCategories,
   useCreatePost,
   useEditPost,
   usePost,
@@ -34,7 +34,7 @@ export default function CreatePostPage() {
   const { currentUser } = useAuth();
 
   const { data: existingPost } = usePost(id ?? "");
-  const { data: categories } = useCategories();
+  const { data: categories } = useAccessibleCategories();
   const createMutation = useCreatePost();
   const editMutation = useEditPost();
   const publishMutation = usePublishPost();

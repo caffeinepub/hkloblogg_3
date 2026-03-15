@@ -8,7 +8,12 @@
  * identity store at mutation time. This ensures a fresh authenticated actor is
  * always used, avoiding stale closures or timing issues with the query cache.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
   BlogRole,
   Category,
@@ -109,6 +114,61 @@ export function useCategories() {
     },
     enabled: !!actor && !isFetching,
   });
+}
+
+/**
+ * Returns only the categories that the current user can access:
+ * - Categories visible on the homepage (isHidden === false)
+ * - Hidden categories where the user has explicit read or comment permissions
+ */
+export function useAccessibleCategories() {
+  const { actor, isFetching } = useAppActor();
+  const identity = useIdentityStore((s) => s.identity);
+  const principalStr = identity?.getPrincipal().toString() ?? "";
+
+  const categoriesQuery = useQuery<Category[]>({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getCategories();
+    },
+    enabled: !!actor && !isFetching,
+  });
+
+  const allCategories = categoriesQuery.data ?? [];
+  const hiddenCategories = allCategories.filter((c) => c.isHidden);
+
+  const permissionsQueries = useQueries({
+    queries: hiddenCategories.map((cat) => ({
+      queryKey: ["categoryPermissions", cat.id],
+      queryFn: async () => {
+        if (!actor) return { readAllowlist: [], commentAllowlist: [] };
+        return actor.getCategoryPermissions(cat.id);
+      },
+      enabled: !!actor && !isFetching,
+    })),
+  });
+
+  const visibleCategories = allCategories.filter((cat) => {
+    if (!cat.isHidden) return true;
+    const hiddenIdx = hiddenCategories.findIndex((h) => h.id === cat.id);
+    if (hiddenIdx === -1) return false;
+    const permResult = permissionsQueries[hiddenIdx];
+    if (!permResult?.data) return false;
+    const { readAllowlist, commentAllowlist } = permResult.data as {
+      readAllowlist: string[];
+      commentAllowlist: string[];
+    };
+    return (
+      readAllowlist.includes(principalStr) ||
+      commentAllowlist.includes(principalStr)
+    );
+  });
+
+  return {
+    data: visibleCategories,
+    isLoading: categoriesQuery.isLoading,
+  };
 }
 
 export function useComments(postId: string) {
