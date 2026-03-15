@@ -40,6 +40,7 @@ import { BlogRole } from "../backend.d";
 import { useAuth } from "../context/AuthContext";
 import {
   useAddCategory,
+  useAdminDeleteUser,
   useAuthorAlias,
   useBlockUser,
   useCategories,
@@ -142,6 +143,7 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const { data: users, isLoading, error } = useListUsers();
   const updateRoleMutation = useUpdateUserRole();
   const blockMutation = useBlockUser();
+  const deleteUserMutation = useAdminDeleteUser();
 
   if (isLoading)
     return (
@@ -174,6 +176,7 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             <TableHead>Status</TableHead>
             {isSuperAdmin && <TableHead>Ändra roll</TableHead>}
             <TableHead>Åtgärd</TableHead>
+            {isSuperAdmin && <TableHead>Radera</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -202,7 +205,7 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     value={user.blogRole}
                     onValueChange={(val) =>
                       updateRoleMutation.mutate(
-                        { userId: user.alias, newRole: val as BlogRole },
+                        { userId: user.userId, newRole: val as BlogRole },
                         {
                           onSuccess: () => toast.success("Roll uppdaterad"),
                           onError: (err) => {
@@ -238,7 +241,7 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   size="sm"
                   onClick={() =>
                     blockMutation.mutate(
-                      { userId: user.alias, block: !user.isBlocked },
+                      { userId: user.userId, block: !user.isBlocked },
                       {
                         onSuccess: () =>
                           toast.success(
@@ -270,6 +273,33 @@ function UsersTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   )}
                 </Button>
               </TableCell>
+              {isSuperAdmin && (
+                <TableCell>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    data-ocid={`admin.users.delete_button.${i + 1}`}
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `Är du säker? Detta raderar kontot och allt innehåll av ${user.alias}.`,
+                        )
+                      ) {
+                        deleteUserMutation.mutate(user.userId, {
+                          onSuccess: () => toast.success("Konto raderat"),
+                          onError: (err) => {
+                            const msg =
+                              err instanceof Error ? err.message : String(err);
+                            toast.error(`Fel vid radering: ${msg}`);
+                          },
+                        });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

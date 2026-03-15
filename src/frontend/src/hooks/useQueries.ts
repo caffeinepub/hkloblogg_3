@@ -473,6 +473,22 @@ export function useBlockUser() {
   });
 }
 
+export function useAdminDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      const actor = await createFreshActorForMutation();
+      return actor.adminDeleteUser(targetUserId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["posts"] });
+    },
+    onError: (err) =>
+      console.error("[AdminMutation] adminDeleteUser failed:", err),
+  });
+}
+
 export function useCategoryPermissions(categoryId: string) {
   const { actor, isFetching } = useAppActor();
   return useQuery<CategoryPermission>({

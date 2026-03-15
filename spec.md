@@ -1,33 +1,29 @@
 # HKLOblogg
 
 ## Current State
-Full-stack blog platform with posts, comments, categories, user roles, and admin panel. Navigation bar exists in Navbar.tsx with links and user menu. Data is fetched via hooks in useQueries.ts using useAppActor. Backend supports getPosts, getCategories, getCommentsForPost, listUsers, getCategoryPermissions.
+Adminpanelens Användare-flik har blockera/avblockera-knappar men de misslyckas med "User not found" eftersom frontend skickar `alias` (från `UserProfile`) till `blockUser(userId: Text)` som förväntar sig principal-ID. Det finns ingen raderingsknapp för superadmin.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Search bar in the Navbar (always visible, between center nav and right side)
-- SearchPage component at route /search showing results divided into sections: Inlägg, Kategorier, Kommentarer, Alias
-- Search filters: free text input, OR/AND toggle, date range (from/to) pickers
-- Comment filter: checkbox "Bara mina kommentarer" (only logged-in user's comments)
-- Search respects permissions: only shows non-hidden categories (or hidden categories where user has explicit rights), only published posts
-- Route /search added to App.tsx
+- `userId` fält i `UserProfile`-typen i Motoko, `backend.did.js`, och `backend.d.ts`
+- `adminDeleteUser(userId: Text)` i Motoko -- tar bort konto, alla inlägg och alla kommentarer av användaren
+- `useAdminDeleteUser` mutation hook i `useQueries.ts`
+- Raderingsknapp (med bekräftelsedialog) i `UsersTab` i `AdminPage.tsx`, synlig bara för superadmin
 
 ### Modify
-- Navbar.tsx: add search input field that navigates to /search?q=... on submit
-- App.tsx: add searchRoute for /search
+- `listUsers()` i Motoko returnerar nu `userId` i varje `UserProfile`
+- `useBlockUser` i `useQueries.ts` skickar nu `userId` (principal) istället för alias
+- `UsersTab` i `AdminPage.tsx` hämtar `userId` från `user.userId` och skickar det till blockera/raderamutationer
+- `backend.did.js` -- `UserProfile` IDL inkluderar `userId: IDL.Text`
+- `backend.d.ts` -- `UserProfile` interface inkluderar `userId: string`
 
 ### Remove
-- Nothing removed
+- Inget tas bort
 
 ## Implementation Plan
-1. Create SearchPage.tsx with:
-   - Text input for search query
-   - OR/AND toggle button
-   - Date range (from/to) date pickers
-   - "Bara mina kommentarer" checkbox (visible when logged in)
-   - Results sections: Inlägg, Kategorier, Kommentarer, Alias
-   - Client-side filtering of posts, categories, comments (fetched from existing queries), users (listUsers)
-   - Permission-aware category filtering using accessible categories logic
-2. Update Navbar.tsx: add compact search input that navigates to /search on submit or enter
-3. Update App.tsx: add /search route
+1. Uppdatera Motoko: lägg till `userId` i `UserProfile`, uppdatera `listUsers`, lägg till `adminDeleteUser`
+2. Uppdatera `backend.did.js`: `UserProfile` IDL med `userId: IDL.Text`
+3. Uppdatera `backend.d.ts`: `UserProfile` interface med `userId: string`
+4. Uppdatera `useQueries.ts`: `useAdminDeleteUser` hook, rätta `useBlockUser` att använda userId
+5. Uppdatera `AdminPage.tsx`: skicka `user.userId` till blockera-mutation, lägg till raderingsknapp för superadmin

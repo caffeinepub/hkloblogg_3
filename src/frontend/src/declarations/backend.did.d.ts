@@ -43,6 +43,7 @@ export interface PostView {
 }
 export type Time = bigint;
 export interface UserProfile {
+  userId: string;
   alias: string;
   isBlocked: boolean;
   blogRole: BlogRole;
@@ -76,6 +77,7 @@ export interface _SERVICE {
   >;
   _caffeineStorageUpdateGatewayPrincipals: ActorMethod<[], undefined>;
   _initializeAccessControlWithSecret: ActorMethod<[string], undefined>;
+  adminDeleteUser: ActorMethod<[string], undefined>;
   addCategory: ActorMethod<[string], undefined>;
   addComment: ActorMethod<[string, string, [] | [ExternalBlob]], string>;
   assignCallerUserRole: ActorMethod<[Principal, UserRole], undefined>;

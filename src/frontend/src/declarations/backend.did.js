@@ -31,6 +31,7 @@ export const BlogRole = IDL.Variant({
   superadmin: IDL.Null,
 });
 export const UserProfile = IDL.Record({
+  userId: IDL.Text,
   alias: IDL.Text,
   isBlocked: IDL.Bool,
   blogRole: BlogRole,
@@ -102,6 +103,7 @@ export const idlService = IDL.Service({
     [IDL.Text],
     [],
   ),
+  adminDeleteUser: IDL.Func([IDL.Text], [], []),
   assignCallerUserRole: IDL.Func([IDL.Principal, UserRole], [], []),
   blockUser: IDL.Func([IDL.Text], [], []),
   createPost: IDL.Func(
@@ -184,6 +186,7 @@ export const idlFactory = ({ IDL }) => {
     superadmin: IDL.Null,
   });
   const UserProfile = IDL.Record({
+    userId: IDL.Text,
     alias: IDL.Text,
     isBlocked: IDL.Bool,
     blogRole: BlogRole,
@@ -255,6 +258,7 @@ export const idlFactory = ({ IDL }) => {
       [IDL.Text],
       [],
     ),
+    adminDeleteUser: IDL.Func([IDL.Text], [], []),
     assignCallerUserRole: IDL.Func([IDL.Principal, UserRole], [], []),
     blockUser: IDL.Func([IDL.Text], [], []),
     createPost: IDL.Func(

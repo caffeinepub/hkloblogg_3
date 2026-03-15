@@ -1,16 +1,15 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "include": [
-      "src/**"
-    ],
     "ignore": [
-      "src/backend.ts",
-      "src/backend.d.ts",
+      "**/backend.ts",
+      "**/backend.d.ts",
+      "dist/**",
+      "node_modules/**",
+      "build/**",
+      "*.config.js",
       "src/declarations/**",
-      "src/components/ui/**",
-      "src/config.ts",
-      "src/lib/utils.ts"
+      "src/config.ts"
     ]
   },
   "formatter": {

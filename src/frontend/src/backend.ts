@@ -132,6 +132,7 @@ export interface CommentView {
   postId: string;
 }
 export interface UserProfile {
+  userId: string;
   alias: string;
   isBlocked: boolean;
   blogRole: BlogRole;
@@ -223,6 +224,7 @@ export interface backendInterface {
     salt: Uint8Array,
   ): Promise<string>;
   saveCallerUserProfile(profile: UserProfile): Promise<void>;
+  adminDeleteUser(targetUserId: string): Promise<void>;
   unblockUser(userId: string): Promise<void>;
   unfollowUser(targetUserId: string): Promise<void>;
   unlikePost(postId: string): Promise<void>;
@@ -976,6 +978,20 @@ export class Backend implements backendInterface {
       const result = await this.actor.saveCallerUserProfile(
         to_candid_UserProfile_n31(this._uploadFile, this._downloadFile, arg0),
       );
+      return result;
+    }
+  }
+  async adminDeleteUser(arg0: string): Promise<void> {
+    if (this.processError) {
+      try {
+        const result = await this.actor.adminDeleteUser(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.adminDeleteUser(arg0);
       return result;
     }
   }

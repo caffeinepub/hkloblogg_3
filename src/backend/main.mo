@@ -29,6 +29,7 @@ actor {
   };
 
   type UserProfile = {
+    userId : Text;
     alias : Text;
     blogRole : BlogRole;
     isBlocked : Bool;
@@ -98,7 +99,6 @@ actor {
     commentAllowlist : [Text];
   };
 
-  // Stable serialization types (no Set, use arrays)
   type StablePost = {
     id : Text;
     title : Text;
@@ -128,7 +128,6 @@ actor {
     following : [Text];
   };
 
-  // ── Stable backing storage ──────────────────────────────────────────────────
   stable var stableUsers : [(Text, User)] = [];
   stable var stableUsersByAlias : [(Text, Text)] = [];
   stable var stablePosts : [(Text, StablePost)] = [];
@@ -140,7 +139,6 @@ actor {
   stable var stableNextPostId : Nat = 0;
   stable var stableNextCommentId : Nat = 0;
 
-  // ── Runtime state (restored from stable on startup) ─────────────────────────
   let users = Map.empty<Text, User>();
   let usersByAlias = Map.empty<Text, Text>();
   let sessions = Map.empty<Text, Text>();
@@ -154,7 +152,6 @@ actor {
   var nextPostId : Nat = stableNextPostId;
   var nextCommentId : Nat = stableNextCommentId;
 
-  // Restore runtime state from stable arrays
   for ((k, v) in stableUsers.vals()) { users.add(k, v) };
   for ((k, v) in stableUsersByAlias.vals()) { usersByAlias.add(k, v) };
   for ((k, sp) in stablePosts.vals()) {
@@ -188,10 +185,9 @@ actor {
     follows.add(sf.userId, followSet);
   };
 
-  // Initialize default categories only if none exist
   func initCategories() {
     if (categories.size() == 0) {
-      let defaultCategories = ["Teknik", "Livsstil", "Nyheter", "Världen", "Natur", "Livsberättelser"];
+      let defaultCategories = ["Teknik", "Livsstil", "Nyheter", "V\u{00e4}rlden", "Natur", "Livsber\u{00e4}ttelser"];
       for (name in defaultCategories.vals()) {
         let cat : Category = { id = name; name = name };
         categories.add(name, cat);
@@ -200,7 +196,6 @@ actor {
   };
   initCategories();
 
-  // ── Upgrade hooks ───────────────────────────────────────────────────────────
   system func preupgrade() {
     stableNextPostId := nextPostId;
     stableNextCommentId := nextCommentId;
@@ -242,7 +237,6 @@ actor {
   };
 
   system func postupgrade() {
-    // Clear stable arrays to free memory (data is already in runtime maps)
     stableUsers := [];
     stableUsersByAlias := [];
     stablePosts := [];
@@ -253,7 +247,6 @@ actor {
     stableFollows := [];
   };
 
-  // ── Helper functions ────────────────────────────────────────────────────────
   func isSuperadmin(caller : Principal) : Bool {
     let userId = caller.toText();
     switch (users.get(userId)) {
@@ -321,7 +314,19 @@ actor {
     };
   };
 
-  // ── User management ─────────────────────────────────────────────────────────
+  // Helper: delete all posts and comments belonging to a userId
+  func deleteUserContent(targetUserId : Text) {
+    let postIdsToRemove = List.empty<Text>();
+    for ((postId, post) in posts.entries()) {
+      if (post.authorId == targetUserId) { postIdsToRemove.add(postId) };
+    };
+    for (postId in postIdsToRemove.toArray().vals()) { posts.remove(postId) };
+    let commentIdsToRemove = List.empty<Text>();
+    for ((commentId, comment) in comments.entries()) {
+      if (comment.authorId == targetUserId) { commentIdsToRemove.add(commentId) };
+    };
+    for (commentId in commentIdsToRemove.toArray().vals()) { comments.remove(commentId) };
+  };
 
   public shared ({ caller }) func register(alias : Text, passwordHash : Blob, salt : Blob) : async Text {
     let userId = caller.toText();
@@ -364,8 +369,26 @@ actor {
       case (?user) {
         usersByAlias.remove(user.alias);
         users.remove(userId);
+        deleteUserContent(userId);
       };
       case (null) {};
+    };
+  };
+
+  public shared ({ caller }) func adminDeleteUser(targetUserId : Text) : async () {
+    if (not isSuperadmin(caller)) {
+      Runtime.trap("Unauthorized: Only superadmins can delete user accounts");
+    };
+    if (caller.toText() == targetUserId) {
+      Runtime.trap("Cannot delete your own superadmin account");
+    };
+    switch (users.get(targetUserId)) {
+      case (?user) {
+        usersByAlias.remove(user.alias);
+        users.remove(targetUserId);
+        deleteUserContent(targetUserId);
+      };
+      case (null) { Runtime.trap("User not found") };
     };
   };
 
@@ -373,7 +396,7 @@ actor {
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
-        ?{ alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
+        ?{ userId = user.userId; alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
       };
       case (null) { null };
     };
@@ -382,7 +405,7 @@ actor {
   public query ({ caller }) func getUserProfile(userId : Text) : async ?UserProfile {
     switch (users.get(userId)) {
       case (?user) {
-        ?{ alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
+        ?{ userId = user.userId; alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
       };
       case (null) { null };
     };
@@ -410,7 +433,7 @@ actor {
     let userId = caller.toText();
     switch (users.get(userId)) {
       case (?user) {
-        ?{ alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
+        ?{ userId = user.userId; alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked };
       };
       case (null) { null };
     };
@@ -421,7 +444,7 @@ actor {
       Runtime.trap("Unauthorized: Only superadmins can list all users");
     };
     users.values().toArray().map(func(user) {
-      { alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked }
+      { userId = user.userId; alias = user.alias; blogRole = user.blogRole; isBlocked = user.isBlocked }
     });
   };
 
@@ -475,8 +498,6 @@ actor {
       case (null) { Runtime.trap("User not found") };
     };
   };
-
-  // ── Posts ───────────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func createPost(title : Text, body : Text, categoryId : Text, mediaUrls : [Storage.ExternalBlob]) : async Text {
     if (not isRegisteredUser(caller)) {
@@ -660,8 +681,6 @@ actor {
       .map(postToPostView);
   };
 
-  // ── Comments ────────────────────────────────────────────────────────────────
-
   public shared ({ caller }) func addComment(postId : Text, text : Text, imageUrl : ?Storage.ExternalBlob) : async Text {
     if (not isRegisteredUser(caller)) {
       Runtime.trap("Unauthorized: Only registered users can add comments");
@@ -730,8 +749,6 @@ actor {
       .map(commentToCommentView);
   };
 
-  // ── Categories ──────────────────────────────────────────────────────────────
-
   public shared ({ caller }) func addCategory(name : Text, isHidden : Bool) : async () {
     if (not isSuperadmin(caller)) {
       Runtime.trap("Unauthorized: Only superadmins can add categories");
@@ -762,8 +779,6 @@ actor {
     else { hiddenCategoriesSet.remove(categoryId) };
   };
 
-  // ── Category permissions ────────────────────────────────────────────────────
-
   public query ({ caller }) func getCategoryPermissions(categoryId : Text) : async CategoryPermission {
     switch (categoryPermissions.get(categoryId)) {
       case (?perm) { perm };
@@ -777,8 +792,6 @@ actor {
     };
     categoryPermissions.add(categoryId, { readAllowlist; commentAllowlist });
   };
-
-  // ── Follows ─────────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func followUser(targetUserId : Text) : async () {
     if (not isRegisteredUser(caller)) {

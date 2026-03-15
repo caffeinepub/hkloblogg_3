@@ -47,6 +47,7 @@ export interface CommentView {
   postId: string;
 }
 export interface UserProfile {
+  userId: string;
   alias: string;
   isBlocked: boolean;
   blogRole: BlogRole;
@@ -68,6 +69,7 @@ export interface backendInterface {
     text: string,
     imageUrl: ExternalBlob | null,
   ): Promise<string>;
+  adminDeleteUser(targetUserId: string): Promise<void>;
   assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
   blockUser(userId: string): Promise<void>;
   createPost(
@@ -98,7 +100,7 @@ export interface backendInterface {
   getFollowingFeed(): Promise<Array<PostView>>;
   getPost(postId: string): Promise<PostView | null>;
   getPosts(): Promise<Array<PostView>>;
-  getPostsByAuthor(authorId: string): Promise<Array<PostView>>;
+  getPostsByAuthor(userId: string): Promise<Array<PostView>>;
   getPostsByCategory(categoryId: string): Promise<Array<PostView>>;
   getProfile(): Promise<UserProfile | null>;
   getUserProfile(userId: string): Promise<UserProfile | null>;
