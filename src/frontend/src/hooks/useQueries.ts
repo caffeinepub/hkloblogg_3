@@ -343,33 +343,6 @@ export function useFollowUser() {
   });
 }
 
-export function useAddCategory() {
-  const { actor } = useAppActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      name,
-      isHidden,
-    }: { name: string; isHidden: boolean }) => {
-      if (!actor) throw new Error("No actor");
-      return actor.addCategory(name, isHidden);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
-  });
-}
-
-export function useDeleteCategory() {
-  const { actor } = useAppActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (categoryId: string) => {
-      if (!actor) throw new Error("No actor");
-      return actor.deleteCategory(categoryId);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
-  });
-}
-
 export function useUpdateUserRole() {
   const { actor } = useAppActor();
   const qc = useQueryClient();
@@ -410,13 +383,62 @@ export function useCategoryPermissions(categoryId: string) {
   });
 }
 
-// These mutations get identity directly from Zustand store at call-time,
-// not from React closure at render-time. This ensures they always use the
-// latest logged-in identity regardless of React Query cache state.
+/**
+ * Creates an authenticated actor for admin mutations.
+ *
+ * IMPORTANT: We intentionally do NOT call _initializeAccessControlWithSecret here.
+ * That function is for the Caffeine platform's own access control layer and
+ * calling it with an empty/wrong token can interfere with subsequent backend calls.
+ *
+ * The app's own admin checks (addCategory, setCategoryVisibility, etc.) only need
+ * a valid Ed25519 identity whose principal matches a superadmin in the users map.
+ * They do NOT depend on the platform's access control layer.
+ */
 async function getAuthenticatedActor() {
   const identity = useIdentityStore.getState().identity;
-  if (!identity) throw new Error("Inte inloggad");
-  return createActorWithConfig({ agentOptions: { identity } });
+  if (!identity) {
+    console.error(
+      "[AdminMutation] Identity is null -- user not logged in or store cleared",
+    );
+    throw new Error("Inte inloggad");
+  }
+  console.log(
+    "[AdminMutation] Creating actor with principal:",
+    identity.getPrincipal().toString(),
+  );
+  const actor = await createActorWithConfig({ agentOptions: { identity } });
+  return actor;
+}
+
+export function useAddCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      name,
+      isHidden,
+    }: { name: string; isHidden: boolean }) => {
+      const actor = await getAuthenticatedActor();
+      return actor.addCategory(name, isHidden);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
+    onError: (e) => {
+      console.error("[AdminMutation] addCategory failed:", e, String(e));
+    },
+  });
+}
+
+export function useDeleteCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (categoryId: string) => {
+      const actor = await getAuthenticatedActor();
+      return actor.deleteCategory(categoryId);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
+    onError: (e) => {
+      console.error("[AdminMutation] deleteCategory failed:", e, String(e));
+    },
+  });
 }
 
 export function useSetCategoryPermissions() {
@@ -439,6 +461,13 @@ export function useSetCategoryPermissions() {
         queryKey: ["categoryPermissions", vars.categoryId],
       });
     },
+    onError: (e) => {
+      console.error(
+        "[AdminMutation] setCategoryPermissions failed:",
+        e,
+        String(e),
+      );
+    },
   });
 }
 
@@ -453,5 +482,12 @@ export function useSetCategoryVisibility() {
       return actor.setCategoryVisibility(categoryId, isHidden);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
+    onError: (e) => {
+      console.error(
+        "[AdminMutation] setCategoryVisibility failed:",
+        e,
+        String(e),
+      );
+    },
   });
 }
